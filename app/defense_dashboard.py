@@ -92,14 +92,18 @@ with left:
     st.markdown("#### 🧠 Baseline (one shared context)")
     st.markdown(chip(exp["baseline_pick_name"], exp["baseline_picked_honest"]), unsafe_allow_html=True)
     st.caption(exp["baseline_why"])
-    st.error("Contaminated: the flood / injection won.") if not exp["baseline_picked_honest"] \
-        else st.success("Held at this level.")
+    if not exp["baseline_picked_honest"]:
+        st.error("Contaminated: the flood / injection won.")
+    else:
+        st.success("Held at this level.")
 with right:
     st.markdown("#### 🛰️ Isolated scouts + concierge")
     st.markdown(chip(exp["isolated_pick_name"], exp["isolated_picked_honest"]), unsafe_allow_html=True)
     st.caption(exp["isolated_why"])
-    st.success("Held: each scout quarantined its seller.") if exp["isolated_picked_honest"] \
-        else st.error("Isolated system also fooled here.")
+    if exp["isolated_picked_honest"]:
+        st.success("Held: each scout quarantined its seller.")
+    else:
+        st.error("Isolated system also fooled here.")
 
 st.markdown("#### Scout leaderboard (each scout saw only its own seller)")
 for r in sorted(exp["scout_reports"], key=lambda x: (x["trust_score"], x["product_score"]), reverse=True):
