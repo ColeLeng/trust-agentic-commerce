@@ -1,0 +1,81 @@
+{
+  "capabilities": {
+    "extensions": [
+      {
+        "description": "UCP Extension",
+        "required": true,
+        "uri": "https://ucp.dev/2026-01-23/specification/overview?v=2026-01-23",
+        "params": {
+          "capabilities": [
+            {
+              "version": "2026-01-23",
+              "spec": "https://ucp.dev/2026-01-23/specification/shopping/checkout",
+              "schema": "https://ucp.dev/2026-01-23/schemas/shopping/checkout.json"
+            },
+            {
+              "version": "2026-01-23",
+              "spec": "https://ucp.dev/2026-01-23/specification/shopping/fulfillment",
+              "schema": "https://ucp.dev/2026-01-23/schemas/shopping/fulfillment.json",
+              "extends": "dev.ucp.shopping.checkout"
+            },
+            {
+              "version": "2026-01-23",
+              "spec": "https://ucp.dev/2026-01-23/specification/shopping/discount",
+              "schema": "https://ucp.dev/2026-01-23/schemas/shopping/discount.json",
+              "extends": "dev.ucp.shopping.checkout"
+            }
+          ]
+        }
+      }
+    ],
+    "streaming": false
+  },
+  "defaultInputModes": [
+    "text",
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "text",
+    "text/plain",
+    "application/json"
+  ],
+  "description": "Cymbal Retail Merchant Agent",
+  "name": "Cymbal Retail Merchant Agent",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "provider": {
+    "organization": "Cymbal Retail",
+    "url": "http://merchant.example.com"
+  },
+  "skills": [
+    {
+      "description": "Helps with product search for given user criteria",
+      "examples": [
+        "Help me find snacks for a weekend trip"
+      ],
+      "id": "product_search",
+      "name": "Perform product search",
+      "tags": [
+        "shopping",
+        "search",
+        "catalog search"
+      ]
+    },
+    {
+      "description": "Adds checkout functionality for the agent",
+      "examples": [
+        "Add a product to current checkout session",
+        "Change the quantity for a product",
+        "Remove a product from checkout"
+      ],
+      "id": "checkout",
+      "name": "Checkout",
+      "tags": [
+        "checkout"
+      ]
+    }
+  ],
+  "url": "http://localhost:10999",
+  "version": "1.0.0"
+}

@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-05-31T18:52:43.741148+00:00",
+  "description": "Temporary mock Universal Commerce Protocol merchant files.",
+  "output_directory": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data",
+  "cleanup_hint": "rm -rf red/mock_merchant_data",
+  "inputs": {
+    "merchant_name": "Cymbal Retail",
+    "organization": "Cymbal Retail",
+    "base_url": "http://localhost:10999",
+    "business_id": "1234567890",
+    "include_discount": true,
+    "provider_url": "http://merchant.example.com",
+    "product_url_base": "https://example.com",
+    "payment_handler_id": "example_payment_provider",
+    "payment_handler_name": "example.payment.provider"
+  },
+  "files": [
+    {
+      "path": "red/mock_merchant_data/ucp.json",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/ucp.json",
+      "purpose": "UCP profile with shopping capabilities and payment handler metadata."
+    },
+    {
+      "path": "red/mock_merchant_data/agent_card.json",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/agent_card.json",
+      "purpose": "A2A agent card advertising the merchant agent and UCP extension."
+    },
+    {
+      "path": "red/mock_merchant_data/products.json",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/products.json",
+      "purpose": "Mock Schema.org product catalog consumed by merchant-agent tests."
+    },
+    {
+      "path": "red/mock_merchant_data/images/cookies.png",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/images/cookies.png",
+      "purpose": "Placeholder product image referenced by products.json."
+    },
+    {
+      "path": "red/mock_merchant_data/images/strawberries.png",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/images/strawberries.png",
+      "purpose": "Placeholder product image referenced by products.json."
+    },
+    {
+      "path": "red/mock_merchant_data/images/chips.png",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/images/chips.png",
+      "purpose": "Placeholder product image referenced by products.json."
+    },
+    {
+      "path": "red/mock_merchant_data/images/nutribar.png",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/images/nutribar.png",
+      "purpose": "Placeholder product image referenced by products.json."
+    },
+    {
+      "path": "red/mock_merchant_data/temp_files_manifest.json",
+      "absolute_path": "/Users/czhong/Documents/tech/trust-agentic-commerce/red/mock_merchant_data/temp_files_manifest.json",
+      "purpose": "Manifest that tracks generated temporary mock merchant files."
+    }
+  ]
+}
