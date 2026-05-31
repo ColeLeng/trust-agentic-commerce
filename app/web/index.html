@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trust Agentic Commerce — Buyer Journey</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◈</span>
+      <div>
+        <div class="brand-title">Trust Agentic Commerce</div>
+        <div class="brand-sub">Buyer journey · context-isolated security scouts</div>
+      </div>
+    </div>
+    <div class="controls">
+      <label class="stores-ctrl">stores
+        <select id="storesSel">
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7" selected>7</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+        </select>
+      </label>
+      <button id="rerunBtn" class="btn">↻ Re-run audit</button>
+      <span id="modeBadge" class="badge">…</span>
+      <a id="weaveBadge" class="badge weave hidden" target="_blank" rel="noopener">◢ Weave</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: buyer + personal context -->
+    <aside class="rail left" id="buyerPanel"></aside>
+
+    <!-- CENTER: the journey flow -->
+    <section class="flow" id="flow">
+      <div class="flow-head">
+        <span class="flow-step">1 · Buyer question</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">2 · Planner dispatches</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">3 · Per-seller scout runs 4 sub-agents</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">4 · Concierge picks safe + compatible</span>
+      </div>
+      <div id="plannerNode" class="planner-node"></div>
+      <svg id="edges" class="edges"></svg>
+      <div id="sellerGrid" class="seller-grid"></div>
+      <div id="conciergeNode" class="planner-node concierge"></div>
+    </section>
+
+    <!-- RIGHT: ground truth + scoreboard -->
+    <aside class="rail right" id="truthPanel"></aside>
+  </main>
+
+  <!-- seller detail drawer -->
+  <div id="drawer" class="drawer hidden">
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+    <div class="drawer-panel" id="drawerPanel"></div>
+  </div>
+
+  <div id="loading" class="loading hidden"><div class="spinner"></div><span>running agents…</span></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
