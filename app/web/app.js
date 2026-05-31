@@ -104,13 +104,13 @@ function renderPlanner(t) {
   const p = t.planner;
   $("plannerNode").innerHTML = `
     <div class="planner-top">
-      <div class="planner-ic">◇</div>
-      <div class="planner-title">Planner agent
-        <small>· dispatches one isolated scout per seller</small>
+      <div class="planner-ic" style="background:#1d3a2c;color:var(--green)">♚</div>
+      <div class="planner-title">Concierge agent
+        <small>· the single blue master agent — dispatch phase</small>
       </div>
-      <span class="role-tag dispatch">▶ dispatch · fan-out</span>
+      <span class="role-tag dispatch">① dispatch · fan-out</span>
     </div>
-    <div class="planner-why">${esc(p.note)} Each scout sees only its own seller — a fake-review flood in one storefront can't pollute another's evaluation.</div>`;
+    <div class="planner-why">${esc(p.note)} The master agent spawns one context-isolated scout per seller — a fake-review flood in one storefront can't pollute another's evaluation.</div>`;
 }
 
 function renderConcierge(t) {
@@ -120,9 +120,9 @@ function renderConcierge(t) {
     <div class="planner-top">
       <div class="planner-ic" style="background:#1d3a2c;color:var(--green)">♚</div>
       <div class="planner-title">Concierge agent
-        <small>· adjudicates ${t.sellers.length} structured scout reports → picks &amp; buys</small>
+        <small>· same master agent — decision phase, adjudicates ${t.sellers.length} structured reports</small>
       </div>
-      <span class="role-tag decide">◀ decision · trust-gated</span>
+      <span class="role-tag decide">② adjudicate · trust-gated checkout</span>
     </div>
     <div class="planner-why">${winner ? `Buys from <span class="planner-winner">${esc(winner.name)}</span>. ` : ""}${esc(c.why)}</div>`;
 }

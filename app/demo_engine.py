@@ -339,7 +339,7 @@ def run_audit(scenario: dict) -> dict:
         "planner": {
             "dispatched": len(stores),
             "checksPerSeller": len(CHECKS),
-            "note": f"Fanned out {len(stores)} context-isolated scouts, {len(CHECKS)} security sub-agents each.",
+            "note": f"Concierge fanned out {len(stores)} context-isolated scouts, {len(CHECKS)} security sub-agents each.",
         },
         "concierge": {
             "winnerSellerId": decision.winner_seller_id,
