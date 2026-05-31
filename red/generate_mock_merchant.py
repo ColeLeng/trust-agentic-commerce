@@ -13,6 +13,7 @@ Example:
     --product-url-base "https://example.com" \
     --payment-handler-id "example_payment_provider" \
     --payment-handler-name "example.payment.provider" \
+    --products-file ./merchant_products.json \
     --include-discount
 
 Outputs:
@@ -22,10 +23,7 @@ Outputs:
     products.json
     temp_files_manifest.json
     images/
-      cookies.png
-      strawberries.png
-      chips.png
-      nutribar.png
+      <one placeholder PNG per product image name>
 """
 
 from __future__ import annotations
@@ -61,57 +59,6 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
         "extends": "dev.ucp.shopping.checkout",
     },
 }
-
-MOCK_PRODUCTS: list[dict[str, str]] = [
-    {
-        "id": "BISC-001",
-        "name": "Chocochip Cookies",
-        "sku": "COOKIES-001",
-        "image": "cookies.png",
-        "brand": "CookieCo",
-        "price": "4.99",
-        "description": "Freshly baked chocochip cookies.",
-        "gtin": "9876543210125",
-        "mpn": "CC-SB-001",
-        "category": "Groceries > Snacks > Cookies & Biscuits",
-    },
-    {
-        "id": "STRAW-001",
-        "name": "Fresh Strawberries",
-        "sku": "STRAW-001",
-        "image": "strawberries.png",
-        "brand": "FarmFresh",
-        "price": "4.49",
-        "description": "Sweet and juicy fresh strawberries, 1 lb.",
-        "gtin": "9876543210127",
-        "mpn": "FF-ST-001",
-        "category": "Groceries > Fresh Produce > Fruits",
-    },
-    {
-        "id": "CHIPS-001",
-        "name": "Classic Potato Chips",
-        "sku": "CHIPS-001",
-        "image": "chips.png",
-        "brand": "SaltySnacks",
-        "price": "3.79",
-        "description": "Crispy and salty classic potato chips, family size.",
-        "gtin": "9876543210128",
-        "mpn": "SS-PC-001",
-        "category": "Groceries > Snacks > Chips & Crisps",
-    },
-    {
-        "id": "NUTRIBAR-001",
-        "name": "Nutri-Bar",
-        "sku": "NUTRIBAR-001",
-        "image": "nutribar.png",
-        "brand": "HealthEats",
-        "price": "2.99",
-        "description": "A nutritious snack bar packed with nuts and seeds.",
-        "gtin": "9876543210135",
-        "mpn": "HE-NB-001",
-        "category": "Groceries > Health & Nutrition Bars",
-    },
-]
 
 # A tiny valid 1x1 transparent PNG for deterministic local test fixtures.
 PLACEHOLDER_PNG = base64.b64decode(
@@ -231,10 +178,85 @@ def build_agent_card(
     }
 
 
-def build_products(*, base_url: str, product_url_base: str) -> list[dict[str, Any]]:
+REQUIRED_PRODUCT_FIELDS = {
+    "id",
+    "name",
+    "sku",
+    "image",
+    "brand",
+    "price",
+    "price_currency",
+    "availability",
+    "item_condition",
+    "description",
+    "gtin",
+    "mpn",
+    "category",
+}
+
+
+def load_product_inputs(products_file: Path) -> list[dict[str, str]]:
+    try:
+        data = json.loads(products_file.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Products file not found: {products_file}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Products file is not valid JSON: {products_file}: {exc}") from exc
+
+    if not isinstance(data, list) or not data:
+        raise SystemExit("Products file must contain a non-empty JSON array of product objects.")
+
+    products: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    seen_images: set[str] = set()
+    for index, item in enumerate(data, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit(f"Product #{index} must be a JSON object.")
+
+        missing_fields = sorted(REQUIRED_PRODUCT_FIELDS.difference(item))
+        if missing_fields:
+            raise SystemExit(
+                f"Product #{index} is missing required fields: {', '.join(missing_fields)}"
+            )
+
+        product: dict[str, str] = {}
+        for field in sorted(REQUIRED_PRODUCT_FIELDS):
+            value = item[field]
+            if not isinstance(value, str) or not value.strip():
+                raise SystemExit(f"Product #{index} field '{field}' must be a non-empty string.")
+            product[field] = value.strip()
+
+        product_id_key = product["id"].casefold()
+        if product_id_key in seen_ids:
+            raise SystemExit(
+                "Duplicate product id in products file (case-insensitive): "
+                f"{product['id']}"
+            )
+        seen_ids.add(product_id_key)
+
+        image_path = Path(product["image"])
+        if image_path.name != product["image"] or product["image"] in {".", ".."}:
+            raise SystemExit(
+                f"Product #{index} image must be a filename, not a path: {product['image']}"
+            )
+        if product["image"] in seen_images:
+            raise SystemExit(f"Duplicate product image filename: {product['image']}")
+        seen_images.add(product["image"])
+
+        products.append(product)
+
+    return products
+
+
+def build_products(
+    *,
+    base_url: str,
+    product_url_base: str,
+    product_inputs: list[dict[str, str]],
+) -> list[dict[str, Any]]:
     products = []
 
-    for item in MOCK_PRODUCTS:
+    for item in product_inputs:
         product_id = item["id"]
         product_slug = product_id.lower()
         products.append(
@@ -250,11 +272,11 @@ def build_products(*, base_url: str, product_url_base: str) -> list[dict[str, An
                 },
                 "offers": {
                     "price": item["price"],
-                    "priceCurrency": "USD",
+                    "priceCurrency": item["price_currency"],
                     "priceSpecification": None,
                     "@type": "Offer",
-                    "availability": "https://schema.org/InStock",
-                    "itemCondition": "https://schema.org/NewCondition",
+                    "availability": item["availability"],
+                    "itemCondition": item["item_condition"],
                 },
                 "aggregateRating": None,
                 "url": f"{product_url_base.rstrip('/')}/{product_slug}",
@@ -268,12 +290,12 @@ def build_products(*, base_url: str, product_url_base: str) -> list[dict[str, An
     return products
 
 
-def write_placeholder_images(out_dir: Path) -> list[Path]:
+def write_placeholder_images(out_dir: Path, product_inputs: list[dict[str, str]]) -> list[Path]:
     images_dir = out_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
 
     image_paths = []
-    for item in MOCK_PRODUCTS:
+    for item in product_inputs:
         image_path = images_dir / item["image"]
         image_path.write_bytes(PLACEHOLDER_PNG)
         image_paths.append(image_path)
@@ -301,6 +323,7 @@ def build_manifest(
             "product_url_base": args.product_url_base,
             "payment_handler_id": args.payment_handler_id,
             "payment_handler_name": args.payment_handler_name,
+            "products_file": str(args.products_file),
         },
         "files": [
             {
@@ -378,6 +401,12 @@ def parse_args() -> argparse.Namespace:
         help="Payment handler name written to ucp.json.",
     )
     parser.add_argument(
+        "--products-file",
+        type=Path,
+        required=True,
+        help="JSON file containing merchant-specific product inputs.",
+    )
+    parser.add_argument(
         "--include-discount",
         action="store_true",
         help="Also advertise dev.ucp.shopping.discount.",
@@ -388,6 +417,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     out_dir: Path = args.out
+    product_inputs = load_product_inputs(args.products_file)
+
     if out_dir.exists():
         raise SystemExit(
             f"Output directory already exists: {out_dir}. "
@@ -426,9 +457,10 @@ def main() -> None:
         build_products(
             base_url=args.base_url,
             product_url_base=args.product_url_base,
+            product_inputs=product_inputs,
         ),
     )
-    image_paths = write_placeholder_images(out_dir)
+    image_paths = write_placeholder_images(out_dir, product_inputs)
 
     generated_files = [ucp_path, agent_card_path, products_path, *image_paths, manifest_path]
     write_json(manifest_path, build_manifest(out_dir=out_dir, files=generated_files, args=args))
