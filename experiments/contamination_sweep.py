@@ -123,7 +123,7 @@ def main() -> None:
     print(f"ISOLATED system held at every level: {result['isolated_held']}")
 
     RESULTS_PATH.write_text(json.dumps(result, indent=2))
-    print(f"\nWrote {RESULTS_PATH.name}. View it:  streamlit run app/defense_dashboard.py")
+    print(f"\nWrote {RESULTS_PATH.name}. (Money-shot table printed above.)")
 
 
 if __name__ == "__main__":

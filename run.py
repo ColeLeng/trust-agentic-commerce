@@ -13,8 +13,11 @@ into the concierge.)
 
     python run.py            # mock mode (no keys) -- always works
 
+This is a quick CLI sanity check of the red -> scout -> concierge flow. The visual
+demo is the HTML/JS UI served by app/server.py (python -m app.server).
+
 MOCK-FIRST: a fresh clone with no LLM backend prints the ranked scouts + the
-concierge's pick and writes results.json for app/dashboard.py.
+concierge's pick and writes results.json.
 
 TODO(glue): add a --contaminate LEVEL flag to seed fakes via data.stores.contaminated_stores.
 """
@@ -64,7 +67,7 @@ def main() -> None:
         "decision": decision.model_dump(mode="json"),
     }
     RESULTS_PATH.write_text(json.dumps(artifact, indent=2))
-    print(f"\nWrote {RESULTS_PATH.name}. Now run:  streamlit run app/dashboard.py")
+    print(f"\nWrote {RESULTS_PATH.name}. For the visual demo:  python -m app.server  (http://localhost:8000)")
 
 
 if __name__ == "__main__":

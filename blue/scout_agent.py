@@ -568,7 +568,11 @@ _RISK_PENALTY = {"low": 5, "medium": 15, "high": 30, "critical": 50}
 _SEV_WEIGHT   = {"low": 0.2, "medium": 0.4, "high": 0.7, "critical": 0.9}
 
 
-def _aggregate(store_id: str, sub_findings: List[SubAgentFinding]) -> ScoutReport:
+def _aggregate(
+    store_id: str,
+    sub_findings: List[SubAgentFinding],
+    product_score: Optional[float] = None,
+) -> ScoutReport:
     decisions   = [f.decision for f in sub_findings]
     risk_levels = [f.risk_level for f in sub_findings]
 
@@ -594,7 +598,10 @@ def _aggregate(store_id: str, sub_findings: List[SubAgentFinding]) -> ScoutRepor
     else:
         recommendation = "safe"
 
-    product_score = round(min(100.0, trust_score + 5.0), 1)
+    # Use caller-supplied product_score (from review ratings) when available.
+    # Fall back to trust+5 only if not provided (e.g. direct calls without a store).
+    if product_score is None:
+        product_score = round(min(100.0, trust_score + 5.0), 1)
 
     # Confidence: higher when there are critical/high signals
     worst = risk_levels[0] if risk_levels else "low"
@@ -658,7 +665,19 @@ def scout_one(store: Store) -> ScoutReport:
         run_returns_check(store,    client),
     ]
 
-    return _aggregate(store.store_id, sub_findings)
+    # Product quality: average of VERIFIED reviews only (unverified reviews are
+    # disproportionately fake, so excluding them prevents a fake 5-star flood from
+    # inflating a dirty seller's product score above honest sellers).
+    # Falls back to all reviews when no verified ones exist.
+    verified = [r for r in store.reviews if r.verified_purchase]
+    pool = verified or store.reviews
+    if pool:
+        avg_rating = sum(r.rating for r in pool) / len(pool)
+        ps = round(min(100.0, avg_rating * 20.0), 1)
+    else:
+        ps = 50.0
+
+    return _aggregate(store.store_id, sub_findings, product_score=ps)
 
 
 def scout_all(stores: List[Store]) -> List[ScoutReport]:
