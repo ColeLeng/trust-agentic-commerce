@@ -28,6 +28,8 @@ An attacker poisons a product listing, metadata field, hidden HTML node, or imag
 4. Compare visible product information against hidden or low-visibility fields such as metadata, JSON-LD, alt text, CSS-hidden spans, and comments.
 5. Check whether the text tries to turn normal browsing into tool execution, payment, refund, or account-management actions.
 6. Treat legal, copyright, safety, or security claims as untrusted unless verified from an independent trusted source.
+7. Detect invisible or low-salience channels, including HTML comments, CSS-hidden spans, zero-size elements, metadata, JSON-LD fields that do not match visible content, image alt text, and tracking URLs.
+8. Require an explicit distinction between product facts and seller-authored agent instructions before any buyer-agent reasoning step.
 
 ## Risk Signals
 
@@ -36,6 +38,8 @@ An attacker poisons a product listing, metadata field, hidden HTML node, or imag
 - `exfiltration`: URL query construction with private user or transaction data.
 - `presentation_attack`: instruction to hide, rename, summarize away, or justify a charge.
 - `competitor_suppression`: instruction to refuse comparison, block lower prices, or claim a competitor is unsafe without evidence.
+- `hidden_channel`: adversarial text appears only in metadata, invisible markup, alt text, comments, or tracking parameters.
+- `tool_escalation`: content asks the buyer agent to call checkout, payment, refund, account, or messaging tools.
 
 ## Required Controls
 
@@ -43,6 +47,8 @@ An attacker poisons a product listing, metadata field, hidden HTML node, or imag
 - Disable checkout and account tools while browsing untrusted content.
 - Require final cart reconciliation against product IDs, seller IDs, prices, quantities, and mandate limits.
 - Block any merchant content that asks to transmit user private data outside approved checkout endpoints.
+- Normalize and scan hidden channels separately from visible page text, then report mismatches as evidence.
+- Use a data-only rendering of merchant content when passing product details to an LLM.
 
 ## Output Expectations
 
