@@ -1,62 +1,92 @@
 """
-run.py -- the VERTICAL SLICE that wires everyone together.
+run.py -- the VERTICAL SLICE / contamination sweep.
 
 OWNER: Glue
 
-Pipeline:  load stores -> red.generate (per store) -> blue.audit -> write results.json
+Pipeline (per contamination level in the experiment set):
+  Red2 question -> Red1 simulate sellers(level) -> {Baseline buyer, Blue planner ->
+  scouts -> concierge} -> compare picks vs. ground truth -> ExperimentResult
+All levels -> AuditRun -> results.json (read by the dashboard).
 
-This is the integration spine. If this runs green on a fresh clone with NO API keys,
-the team can develop their module in isolation and trust the seams.
+    python run.py                 # mock mode (no codex CLI) -- always works
+    # install + `codex login`, then python run.py  -> real agents
 
-    python run.py            # mock mode (no codex CLI) — always works
-    # install + `codex login`, then `python run.py`   -> real red+blue agents
+MOCK-FIRST: a fresh clone with no codex CLI prints the money-shot table below.
 
-TODO(glue): add a --rounds flag and a --no-red flag (audit raw mock reviews only).
+TODO(glue): add a --strategy flag to sweep evasion vs. review_flood side by side.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from blue.orchestrator import audit_all
-from data.stores import load_stores
+from baseline.buyer_agent import choose
+from blue.concierge_agent import adjudicate
+from blue.planner_agent import plan_and_dispatch
+from data.marketplace import honest_seller_ids
 from llm import agent_available
-from red.generator import generate
-from schema import AuditResult
+from red.question_agent import set_question
+from red.seller_agent import simulate_sellers
+from schema import AuditRun, BuyerQuestion, ContaminationStrategy, ExperimentResult
 from tracing import init_tracing
 
 RESULTS_PATH = Path(__file__).parent / "results.json"
 
 
-def main() -> None:
+def build_audit(question: BuyerQuestion | None = None,
+                strategy: ContaminationStrategy | None = None) -> AuditRun:
+    """Run the full contamination sweep and return an AuditRun (no printing)."""
     init_tracing()
+    question = question or set_question()
+    strategy = strategy or question.strategies[0]
+    experiments = []
+    honest_ids: list[str] = []
+
+    for level in question.contamination_levels:
+        sellers = simulate_sellers(question, level, strategy)
+        if not honest_ids:
+            honest_ids = honest_seller_ids(sellers)
+        baseline = choose(question, sellers)
+        scout_outputs = plan_and_dispatch(question, sellers)
+        isolated = adjudicate(scout_outputs, question.personal_context)
+        experiments.append(ExperimentResult(
+            contamination_level=level, strategy=strategy, sellers=sellers,
+            scout_outputs=scout_outputs, baseline=baseline, isolated=isolated,
+            baseline_picked_honest=baseline.chosen_seller_id in honest_ids,
+            isolated_picked_honest=isolated.winner_seller_id in honest_ids))
+
+    return AuditRun(used_real_agents=agent_available(), question=question,
+                    honest_seller_ids=honest_ids, experiments=experiments)
+
+
+def main() -> None:
     real = agent_available()
-    mode = "REAL AGENTS" if real else "MOCK"
-    print(f"=== Trust Agentic Commerce :: {mode} mode ===\n")
+    print(f"=== Trust Agentic Commerce :: {'REAL AGENTS' if real else 'MOCK'} mode ===\n")
+    run = build_audit()
+    q = run.question
 
-    # 1. Load the catalog (mock reviews attached by default).
-    stores = load_stores(with_mock_reviews=True)
+    print(f"Buyer: {q.product_query}")
+    print(f"Vertical: {q.vertical} | merchants: {q.n_merchants} | "
+          f"strategy: {q.strategies[0].value}\n")
+    print(f"{'contam':>7} | {'baseline pick':>22} | {'isolated pick':>22}")
+    print("-" * 60)
+    for e in run.experiments:
+        def tag(sid, honest):
+            return f"{sid} ({'honest' if honest else 'DISHONEST'})"
+        print(f"{e.contamination_level:>6.0%} | "
+              f"{tag(e.baseline.chosen_seller_id, e.baseline_picked_honest):>22} | "
+              f"{tag(e.isolated.winner_seller_id, e.isolated_picked_honest):>22}")
 
-    # 2. RED: regenerate each store's reviews via the generator.
-    #    (mock mode returns deterministic seeded reviews — same shape, no codex needed)
-    for store in stores:
-        store.reviews = generate(store, n_clean=8, n_fake=4 if store.is_dirty else 1)
-        planted = sum(1 for r in store.reviews if r.is_fake)
-        print(f"  red  | {store.store_id} {store.name:26s} "
-              f"{len(store.reviews):2d} reviews ({planted} planted fake)")
+    RESULTS_PATH.write_text(run.model_dump_json(indent=2))
 
-    print()
-
-    # 3. BLUE: audit every store with the feedback-loop orchestrator.
-    detections = audit_all(stores)
-    for d in detections:
-        print(f"  blue | {d.store_id} trust={d.trust_score:5.1f} "
-              f"caught {d.fake_count}/{d.total_reviews} fakes in {d.rounds} round(s)")
-
-    # 4. Persist the artifact the dashboard reads.
-    result = AuditResult(used_real_agents=real, stores=stores, detections=detections)
-    RESULTS_PATH.write_text(result.model_dump_json(indent=2))
+    bp = run.breaking_point
+    print("-" * 60)
+    if bp is not None:
+        print(f"\nBASELINE BREAKS at {bp:.0%} contamination (picks a dishonest seller).")
+    else:
+        print("\nBaseline held at all tested levels (raise contamination to break it).")
+    isolated_held = all(e.isolated_picked_honest for e in run.experiments)
+    print(f"ISOLATED system held at every level: {isolated_held}")
     print(f"\nWrote {RESULTS_PATH.name}. Now run:  streamlit run app/dashboard.py")
 
 

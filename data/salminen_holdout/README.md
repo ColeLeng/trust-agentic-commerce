@@ -3,8 +3,9 @@
 OWNER: Blue / Eval
 
 This folder is where you drop the **Salminen fake-review dataset** (~40k labeled
-reviews, real genuine vs. computer-generated/fake). Blue is **never** trained or
-tuned on this — it's the honest precision/recall check in `eval/run_eval.py`.
+reviews, real genuine vs. computer-generated/fake). The blue **scout detector**
+(`blue/signals.py`) is **never** trained or tuned on this — it's the honest
+precision/recall check in `eval/run_eval.py` (report (B)).
 
 > Salminen, J., Kandpal, C., Kamel, A.M., Jung, S., Jansen, B.J. (2022).
 > *Creating and detecting fake reviews of online products.*
