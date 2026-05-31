@@ -13,4 +13,7 @@ pandas>=2.0
 # Real agents are driven by the Codex CLI (`codex exec`), installed out-of-band:
 #   npm install -g @openai/codex   # or: brew install codex
 #   codex login
-# No `anthropic` package needed.
+
+# Blue team scout agent uses the Anthropic SDK directly (optional — mock mode
+# works without it; only needed when ANTHROPIC_API_KEY is set):
+anthropic>=0.40
