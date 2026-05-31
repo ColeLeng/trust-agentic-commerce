@@ -23,6 +23,8 @@ Scammers create sites with flawless Schema.org product feeds, clean metadata, lo
 4. Flag product catalogs with perfect structured data but weak identity signals, missing support channels, or generic policies.
 5. Validate that image URLs, product URLs, and provider URLs share an expected merchant identity or documented marketplace relationship.
 6. Check for newly registered domains, lookalike domains, typosquatting, disposable infrastructure, or mismatched payment handlers.
+7. Verify that discounts, promotions, and inventory claims are backed by credible policy pages or trusted marketplace data.
+8. Check whether the merchant provides enough human-facing trust evidence, including support channel, physical or legal identity, return terms, and complaint history when available.
 
 ## Risk Signals
 
@@ -31,6 +33,8 @@ Scammers create sites with flawless Schema.org product feeds, clean metadata, lo
 - `schema_only_trust`: structured data is complete while visible storefront quality is weak.
 - `domain_mismatch`: product, provider, image, and payment domains do not align.
 - `frictionless_checkout_lure`: unusually easy checkout for a new or unknown merchant.
+- `unsupported_discount`: large discount lacks credible explanation or independent corroboration.
+- `human_trust_gap`: machine-readable data is strong but human-facing trust evidence is missing or incoherent.
 
 ## Required Controls
 
@@ -38,6 +42,7 @@ Scammers create sites with flawless Schema.org product feeds, clean metadata, lo
 - Add price-anomaly thresholds that force manual review.
 - Prefer trusted merchants when price advantage is small or identity confidence is low.
 - Block payment to merchants whose payment handler identity cannot be reconciled with storefront identity.
+- Require manual review when a price anomaly is combined with weak identity, newly observed domain, or payment mismatch.
 
 ## Output Expectations
 
