@@ -110,13 +110,16 @@ body {
 .flow-arrow { color: var(--line-2); }
 .planner-node {
   background: linear-gradient(135deg, var(--panel-2), var(--panel));
-  border: 1px solid var(--line-2); border-radius: var(--radius);
+  border: 1px solid var(--line-2); border-left: 4px solid var(--accent); border-radius: var(--radius);
   padding: 14px 18px; margin: 0 auto 26px; max-width: 620px; position: relative; z-index: 2;
 }
-.planner-node.concierge { margin: 30px auto 0; border-color: #1f5e44; }
+.planner-node.concierge { margin: 30px auto 0; border-color: #1f5e44; border-left: 4px solid var(--green); }
 .planner-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .planner-ic { width: 30px; height: 30px; border-radius: 8px; background: #21304a; display: grid; place-items: center; color: var(--accent); font-size: 16px; }
 .planner-title { font-weight: 700; }
+.role-tag { margin-left: auto; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; padding: 4px 10px; border-radius: 20px; border: 1px solid; white-space: nowrap; }
+.role-tag.dispatch { color: var(--accent); border-color: #2c3f5c; background: rgba(106,168,255,.08); }
+.role-tag.decide { color: var(--green); border-color: #1f5e44; background: rgba(52,211,153,.08); }
 .planner-title small { color: var(--txt-dim); font-weight: 400; font-size: 11.5px; }
 .planner-why { font-size: 12.5px; color: var(--txt-dim); line-height: 1.5; }
 .planner-winner { color: var(--green); font-weight: 700; }
