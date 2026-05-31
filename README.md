@@ -12,7 +12,7 @@ A multi-agent **trust audit** system for online stores, built for a 5-hour hacka
 
 ## ⭐ The one hard rule: MOCK-FIRST
 
-On a **fresh clone with NO API keys**, both of these succeed and show a populated
+On a **fresh clone with no LLM backend**, both of these succeed and show a populated
 ranked catalog:
 
 ```bash
@@ -20,9 +20,13 @@ python run.py
 streamlit run app/dashboard.py
 ```
 
-Every module ships with a deterministic mock. When `ANTHROPIC_API_KEY` /
-`WANDB_API_KEY` are present, the real agents and tracing run instead — same data
-shapes, no code changes. **Do not break this guarantee.**
+Every module ships with a deterministic mock. When the **`codex` CLI** is installed
+and logged in, the real red/blue agents run instead — same data shapes, no code
+changes. **Do not break this guarantee.**
+
+> We drive the model through the **Codex CLI (`codex exec`)** instead of the
+> Anthropic SDK, so there's no API key or Python SDK to manage — it reuses your
+> existing `codex` login. Tracing (Weave) still uses `WANDB_API_KEY` if present.
 
 ## Quickstart
 
@@ -31,11 +35,13 @@ shapes, no code changes. **Do not break this guarantee.**
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. (optional) enable real agents + tracing
-cp .env.example .env        # then fill in ANTHROPIC_API_KEY / WANDB_API_KEY
+# 2. (optional) enable REAL agents — install + log in to the Codex CLI
+npm install -g @openai/codex     # or: brew install codex
+codex login                      # one-time
+# (optional) tracing: cp .env.example .env and set WANDB_API_KEY
 
 # 3. run the vertical slice (writes results.json)
-python run.py
+python run.py                    # mock if no codex CLI; real agents if present
 
 # 4. launch the dashboard
 streamlit run app/dashboard.py
@@ -49,7 +55,7 @@ python eval/run_eval.py
 | Path | Owner | What it does |
 |------|-------|--------------|
 | `schema.py` | **Whole team (frozen contract)** | Pydantic models everyone shares. Changes need team sign-off. |
-| `tracing.py` · `llm.py` | **Glue** | Weave `@traced` decorator + Anthropic client (both mock-safe). |
+| `tracing.py` · `llm.py` | **Glue** | Weave `@traced` decorator + Codex CLI backend (both mock-safe). |
 | `run.py` | **Glue** | Vertical slice: load → red → blue → `results.json`. |
 | `data/stores.py` | **Data / Glue** | 6 stores (3 clean, 3 dirty) + deterministic mock reviews. |
 | `data/salminen_holdout/` | **Blue / Eval** | Drop-in folder for the real 40k labeled fakes set. |
@@ -88,5 +94,5 @@ data/stores.py ──► red/generator.py ──► List[Review] ──► blue/
 
 ## Tech stack
 
-Python 3.11 · Anthropic SDK (agents) · Weave/wandb (tracing) · Pydantic (schema) ·
-Streamlit (dashboard).
+Python 3.11 · Codex CLI `codex exec` (agents) · Weave/wandb (tracing) ·
+Pydantic (schema) · Streamlit (dashboard).

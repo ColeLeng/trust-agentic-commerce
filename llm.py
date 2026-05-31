@@ -1,20 +1,32 @@
 """
-llm.py -- shared Anthropic client helper.
+llm.py -- shared LLM backend via the Codex CLI (`codex exec`).
 
 OWNER: Glue (shared utility)
 
-`have_api_key()` -> bool tells any module whether to run real agents or mocks.
-`complete(system, prompt)` -> str calls Claude when a key exists.
+We call the model through the `codex exec` CLI instead of the Anthropic SDK, so
+there's NO ANTHROPIC_API_KEY and no `anthropic` dependency. It uses your existing
+Codex login (`~/.codex/auth.json`).
 
-MOCK-FIRST: callers MUST check `have_api_key()` and provide their own mock path.
-This helper never fabricates data; it only talks to the real API.
+    agent_available()           -> bool : is the `codex` CLI installed?
+    complete(system, prompt)    -> str  : one non-interactive completion's text.
 
-TODO(glue): add retry/backoff + a cheaper model toggle if we hit rate limits.
+MOCK-FIRST: callers MUST check `agent_available()` and provide their own mock path.
+This helper never fabricates data; it only shells out to the real CLI.
+
+Setup for real agents:
+    npm install -g @openai/codex   # or: brew install codex
+    codex login                    # one-time, stores ~/.codex/auth.json
+
+TODO(glue): add a retry on empty output + an optional `--json` event stream if we
+want token usage in the dashboard.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 try:  # load THIS repo's .env only (never walk up into a parent/global .env)
@@ -26,25 +38,65 @@ try:  # load THIS repo's .env only (never walk up into a parent/global .env)
 except Exception:
     pass
 
-DEFAULT_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+CODEX_BIN = os.getenv("CODEX_BIN", "codex")
+CODEX_MODEL = os.getenv("CODEX_MODEL")  # optional, e.g. "gpt-5.5"; None = codex default
 
 
+def agent_available() -> bool:
+    """True when the codex CLI is installed (real-agent mode is possible)."""
+    return shutil.which(CODEX_BIN) is not None
+
+
+# Backwards-compat alias: earlier code referenced have_api_key().
 def have_api_key() -> bool:
-    return bool(os.getenv("ANTHROPIC_API_KEY"))
+    return agent_available()
 
 
-def complete(system: str, prompt: str, max_tokens: int = 1024, model: str | None = None) -> str:
-    """Call Claude. Raises if no key — callers should gate on have_api_key() first."""
-    if not have_api_key():
-        raise RuntimeError("ANTHROPIC_API_KEY missing; call have_api_key() and use a mock.")
+def complete(
+    system: str,
+    prompt: str,
+    max_tokens: int = 1024,  # kept for call-site compatibility; codex manages its own
+    model: str | None = None,
+    timeout: int = 180,
+) -> str:
+    """
+    Run one non-interactive Codex completion and return the final message text.
+    Raises if the CLI is missing — callers should gate on agent_available() first.
 
-    from anthropic import Anthropic
+    The system + prompt are concatenated (codex exec has no separate system slot).
+    Runs with `-s read-only` so the agent can't modify the workspace; the answer
+    is captured via `--output-last-message` for clean, log-free text.
+    """
+    if not agent_available():
+        raise RuntimeError("codex CLI not found; call agent_available() and use a mock.")
 
-    client = Anthropic()
-    resp = client.messages.create(
-        model=model or DEFAULT_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
+    combined = (
+        f"{system.strip()}\n\n{prompt.strip()}\n\n"
+        "Output ONLY what was requested. No preamble, no explanation, no code fences."
     )
-    return "".join(block.text for block in resp.content if getattr(block, "type", None) == "text")
+
+    out_fd, out_path = tempfile.mkstemp(suffix=".txt", prefix="codex_")
+    os.close(out_fd)
+    cmd = [
+        CODEX_BIN, "exec",
+        "--skip-git-repo-check",
+        "-s", "read-only",
+        "--color", "never",
+        "-o", out_path,
+    ]
+    m = model or CODEX_MODEL
+    if m:
+        cmd += ["-m", m]
+    cmd += ["-"]  # read prompt from stdin
+
+    try:
+        subprocess.run(
+            cmd, input=combined, text=True,
+            capture_output=True, timeout=timeout, check=False,
+        )
+        return Path(out_path).read_text(encoding="utf-8", errors="ignore").strip()
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass

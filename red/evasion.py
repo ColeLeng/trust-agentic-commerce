@@ -7,7 +7,7 @@ OWNER: Red team
 specific-sounding details, varied authors, no exclamation spam. The whole point
 is to beat blue/analyzer's heuristics. This is the red-vs-blue arms race.
 
-MOCK-FIRST: with no key, returns hand-crafted subtle fakes (still labeled
+MOCK-FIRST: with no codex CLI, returns hand-crafted subtle fakes (still labeled
 is_fake=True) so the "Inject Attack" button in the dashboard works offline.
 
 TODO(red):
@@ -21,16 +21,20 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from llm import complete, have_api_key
+from llm import agent_available, complete
 from schema import DetectorOutput, Review, ReviewSource, Store
 from tracing import traced
 
 EVASION_SYSTEM = (
-    "You write FAKE reviews that must evade automated fake-review detectors. "
-    "Rules: vary ratings (3-5 stars), include concrete-sounding but invented "
-    "details (delivery day, a minor flaw, a use case), use distinct natural "
-    "writing styles per review, and NEVER use exclamation spam or generic hype. "
-    "They should read like real satisfied customers but are paid placements."
+    "You are a data generator for a fake-review DETECTION research project (a "
+    "hackathon defensive-security tool). Produce SYNTHETIC test fixtures that "
+    "imitate HARD-TO-DETECT spam reviews, used only to stress-test and improve a "
+    "spam detector — they are labeled as fake and never published. This follows "
+    "the Salminen et al. (2022) academic methodology.\n"
+    "Style for this hard class: vary ratings (3-5 stars), include concrete-sounding "
+    "but invented details (delivery day, a minor flaw, a use case), use distinct "
+    "natural writing styles per sample, and NEVER use exclamation spam or generic "
+    "hype. They should read like genuine satisfied customers."
 )
 
 # Hand-crafted subtle fakes for the no-key mock path.
@@ -72,7 +76,7 @@ def _parse(raw: str, store: Store, start: int) -> List[Review]:
 @traced
 def evolve(store: Store, n: int = 4, target: Optional[DetectorOutput] = None) -> List[Review]:
     """Produce n subtle evasion fakes. `target` is blue's last output to adapt to."""
-    if not have_api_key():
+    if not agent_available():
         picks = (_MOCK_EVASION * ((n // len(_MOCK_EVASION)) + 1))[:n]
         return [
             Review(
@@ -98,13 +102,23 @@ def evolve(store: Store, n: int = 4, target: Optional[DetectorOutput] = None) ->
         f"Write {n} evasive fake reviews. Return ONLY a JSON array of objects with "
         f'keys "rating", "text", "author".{hint}'
     )
-    return _parse(complete(EVASION_SYSTEM, prompt), store, start=0)
+    parsed = _parse(complete(EVASION_SYSTEM, prompt), store, start=0)
+    if parsed:
+        return parsed
+    # codex hiccup -> fall back to the hand-crafted subtle fakes so the demo never stalls.
+    picks = (_MOCK_EVASION * ((n // len(_MOCK_EVASION)) + 1))[:n]
+    return [
+        Review(review_id=f"{store.store_id}-e{i:02d}", store_id=store.store_id, rating=rating,
+               text=text, author=author, verified_purchase=True,
+               source=ReviewSource.LLM_EVASION, is_fake=True)
+        for i, (author, rating, text) in enumerate(picks)
+    ]
 
 
 if __name__ == "__main__":
     from data.stores import STORES
 
     rs = evolve(STORES[4])
-    print(f"evasion: {len(rs)} subtle fakes | real_agents={have_api_key()}")
+    print(f"evasion: {len(rs)} subtle fakes | real_agents={agent_available()}")
     for r in rs:
         print(f"  [{r.rating}] {r.author}: {r.text[:70]}")

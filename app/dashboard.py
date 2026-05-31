@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT))
 
 from blue.orchestrator import audit_store  # noqa: E402
 from data.stores import load_stores  # noqa: E402
-from llm import have_api_key  # noqa: E402
+from llm import agent_available  # noqa: E402
 from red.evasion import evolve  # noqa: E402
 from red.generator import generate  # noqa: E402
 from schema import AuditResult, DetectorOutput, Store  # noqa: E402
@@ -51,7 +51,7 @@ def _build_fresh() -> AuditResult:
     for s in stores:
         s.reviews = generate(s, n_clean=8, n_fake=4 if s.is_dirty else 1)
     detections = [audit_store(s) for s in stores]
-    return AuditResult(used_real_agents=have_api_key(), stores=stores, detections=detections)
+    return AuditResult(used_real_agents=agent_available(), stores=stores, detections=detections)
 
 
 @st.cache_data(show_spinner="Auditing catalog...")
@@ -137,7 +137,7 @@ with st.sidebar:
               on_click=inject_attack, args=(attack_target, n_attack))
     st.divider()
     st.button("↺ Reset catalog", use_container_width=True, on_click=reset_state)
-    st.caption(f"API key: {'present' if have_api_key() else 'absent (mock)'}")
+    st.caption(f"codex CLI: {'available (real agents)' if agent_available() else 'absent (mock)'}")
 
 st.divider()
 
