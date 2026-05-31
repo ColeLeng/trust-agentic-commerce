@@ -226,9 +226,13 @@ def load_product_inputs(products_file: Path) -> list[dict[str, str]]:
                 raise SystemExit(f"Product #{index} field '{field}' must be a non-empty string.")
             product[field] = value.strip()
 
-        if product["id"] in seen_ids:
-            raise SystemExit(f"Duplicate product id in products file: {product['id']}")
-        seen_ids.add(product["id"])
+        product_id_key = product["id"].casefold()
+        if product_id_key in seen_ids:
+            raise SystemExit(
+                "Duplicate product id in products file (case-insensitive): "
+                f"{product['id']}"
+            )
+        seen_ids.add(product_id_key)
 
         image_path = Path(product["image"])
         if image_path.name != product["image"] or product["image"] in {".", ".."}:
