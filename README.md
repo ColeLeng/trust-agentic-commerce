@@ -61,18 +61,22 @@ python eval/run_eval.py
 | `data/salminen_holdout/` | **Blue / Eval** | Drop-in folder for the real 40k labeled fakes set. |
 | `red/generator.py` | **🔴 Red** | LLM fake + clean review generator. |
 | `red/evasion.py` | **🔴 Red** | Subtler fakes meant to beat blue. |
-| `blue/scraper_agent.py` | **🔵 Blue** | Ingests a store's reviews (steerable). |
-| `blue/analyzer_agent.py` | **🔵 Blue** | Heuristic + LLM fake detection → `Verdict` + `Evidence`. |
-| `blue/orchestrator.py` | **🔵 Blue** | The **feedback loop**, emits `DetectorOutput`. |
-| `eval/run_eval.py` | **Blue / Eval** | Precision/recall of blue on the holdout. |
-| `app/dashboard.py` | **🟢 Glue** | Ranked catalog, evidence, Inject Attack, metrics. |
+| `blue/scout_agent.py` | **🔵 Blue** | The **isolated scout**: audits ONE seller in its own context → `ScoutReport`. |
+| `blue/concierge_agent.py` | **🔵 Blue** | **THE master agent** (the only one): spawns the isolated scouts and adjudicates their structured reports → `ConciergeDecision`. |
+| `eval/run_eval.py` | **Blue / Eval** | Precision/recall of the scout's per-review signals on the holdout. |
+| `app/dashboard.py` | **🟢 Glue** | Ranked catalog, scout evidence, Inject Attack, metrics. |
+
+> **One master agent.** The blue side has exactly one coordinator —
+> `blue/concierge_agent.py`. The old `planner` / `orchestrator` / `analyzer` /
+> `scraper` agents were all the same role under different names; they've been
+> consolidated into the concierge. Develop and upgrade THAT file.
 
 ### Suggested 5-person split (2 red / 2 blue / 1 glue)
 
 - **Red 1** → `red/generator.py` (volume + realism of clean/fake reviews)
-- **Red 2** → `red/evasion.py` (the arms race: beat blue's current detectors)
-- **Blue 1** → `blue/analyzer_agent.py` (signals, weights, LLM second opinion)
-- **Blue 2** → `blue/orchestrator.py` + `eval/run_eval.py` (loop logic + honest metrics)
+- **Red 2** → `red/evasion.py` (the arms race: beat blue's scout)
+- **Blue 1** → `blue/scout_agent.py` (per-seller signals, weights, LLM second opinion)
+- **Blue 2** → `blue/concierge_agent.py` + `eval/run_eval.py` (dispatch + adjudication + honest metrics)
 - **Glue** → `app/dashboard.py` + `run.py` + keeps `schema.py` stable
 
 The **frozen contract** in `schema.py` is the only shared surface — agree on it
@@ -81,16 +85,19 @@ first, then everyone codes against it independently.
 ## How the pieces talk
 
 ```
-data/stores.py ──► red/generator.py ──► List[Review] ──► blue/orchestrator.py
-                       red/evasion.py ─┘   (feedback loop)        │
-                                                                  ▼
-                                                          DetectorOutput
-                                                                  │
+data/stores.py ──► red/generator.py ──► List[Review] ─┐
+                       red/evasion.py ─┘               │
+                                                       ▼
+                                      blue/concierge_agent.py  (THE master agent)
+                                          ├─ dispatch_scouts ─► blue/scout_agent.scout_one ×N  (ISOLATED)
+                                          │                         └─► ScoutReport[]
+                                          └─ adjudicate ──────────────► ConciergeDecision
+                                                                              │
                                           run.py ──► results.json ──► app/dashboard.py
 ```
 
-`schema.py` defines every object on those arrows: `Review`, `Store`, `Evidence`,
-`Verdict`, `DetectorOutput`, `AuditResult`.
+`schema.py` defines the shared objects: `Review`, `Store`, `Evidence`.
+`ScoutReport` and `ConciergeDecision` live with their agents.
 
 ## Tech stack
 
@@ -104,8 +111,9 @@ Pydantic (schema) · Streamlit (dashboard).
 The headline architectural claim. A single-context shopping agent reads **every**
 seller's reviews in one window, so a dishonest seller's fake-review flood (and
 injected "system" instructions) can win past a contamination threshold. We defend
-by giving each seller its **own isolated scout**, then a **concierge** adjudicates
-only the scouts' *structured* outputs — never the raw seller text.
+by giving each seller its **own isolated scout**, then the **concierge** (the one
+master agent) adjudicates only the scouts' *structured* outputs — never the raw
+seller text.
 
 ```
 data/stores.contaminated_stores(level)
@@ -113,11 +121,10 @@ data/stores.contaminated_stores(level)
         ├─► baseline/buyer_agent.choose()      # CONTROL: reads ALL sellers in ONE context
         │        └─► BaselineDecision           # gets contaminated past a threshold
         │
-        └─► blue/planner_agent.plan_and_dispatch()
-                 └─► blue/scout_agent.scout_one()  ×N   # ISOLATED: one seller, one context
-                          └─► ScoutReport[]
-                                   └─► blue/concierge_agent.adjudicate()  # structured-only
-                                            └─► ConciergeDecision
+        └─► blue/concierge_agent  (THE master agent)
+                 ├─ dispatch_scouts ─► blue/scout_agent.scout_one() ×N   # ISOLATED: one seller, one context
+                 │                         └─► ScoutReport[]
+                 └─ adjudicate ──────────────► ConciergeDecision         # structured-only
 experiments/contamination_sweep.py  ──► defense_results.json ──► app/defense_dashboard.py
 ```
 
@@ -132,9 +139,9 @@ Expected money-shot: the **baseline** flips to a dishonest seller around **40%**
 contamination, while the **isolated** system keeps picking an honest seller at
 every level.
 
-This layer is **purely additive**: it reuses the existing `blue/scout_agent`
-(`scout_one`/`ScoutReport`, isolated per seller), `schema.Store`, and
-`data/stores.py`. New pieces: `blue/planner_agent.py`, `blue/concierge_agent.py`,
+This layer reuses the existing `blue/scout_agent` (`scout_one`/`ScoutReport`,
+isolated per seller), `schema.Store`, and `data/stores.py`. The pieces:
+`blue/concierge_agent.py` (the master: `dispatch_scouts` + `adjudicate`),
 `baseline/buyer_agent.py`, `experiments/contamination_sweep.py`,
 `app/defense_dashboard.py`, plus `data.stores.contaminated_stores(level)`.
 `ConciergeDecision` / `BaselineDecision` live with their agents (like `ScoutReport`)

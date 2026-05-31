@@ -6,23 +6,22 @@ OWNER: Glue
 Run:
     streamlit run app/dashboard.py
 
-Three things on screen:
-  1. METRIC PANEL          -- stores audited, fakes caught, avg trust, mode badge
-  2. RANKED CATALOG        -- stores sorted by trust score, click a store to see
-                              its reviews + blue's Evidence for each flagged fake
-  3. "INJECT ATTACK" button -- red/evasion drops subtle fakes into a store live,
-                              blue re-audits, and you watch the trust score move.
+  1. METRIC PANEL          -- stores audited, avg trust, the concierge's pick, mode
+  2. RANKED CATALOG        -- stores sorted by each isolated scout's trust score;
+                              click a store to see the scout's risk flags + evidence
+  3. "INJECT ATTACK" button -- red/evasion drops subtle fakes into a store live, the
+                              store's ISOLATED scout re-scores, the concierge re-picks.
 
-MOCK-FIRST: if results.json is missing, the dashboard generates it on the fly via
-the same mock pipeline as run.py. Loads populated on a fresh clone with NO keys.
+Blue has ONE master agent: blue/concierge_agent.py. It spawns an isolated scout
+(blue/scout_agent.scout_one) per store and adjudicates their structured reports.
 
-TODO(glue):
-  - Add a per-round timeline of the analyzer<->scraper feedback loop.
-  - Wire a "Red, evade THIS detector" button that passes the DetectorOutput to evasion.
+MOCK-FIRST: if results.json is missing, it rebuilds via the same mock pipeline as
+run.py. Populated on a fresh clone with NO keys.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -31,64 +30,61 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from blue.orchestrator import audit_store  # noqa: E402
+from blue.concierge_agent import ConciergeDecision, adjudicate, dispatch_scouts  # noqa: E402
+from blue.scout_agent import ScoutReport, scout_one  # noqa: E402
 from data.stores import load_stores  # noqa: E402
 from llm import agent_available  # noqa: E402
 from red.evasion import evolve  # noqa: E402
 from red.generator import generate  # noqa: E402
-from schema import AuditResult, DetectorOutput, Store  # noqa: E402
+from schema import Store  # noqa: E402
 
 RESULTS_PATH = ROOT / "results.json"
-
 st.set_page_config(page_title="Trust Agentic Commerce", page_icon="🛡️", layout="wide")
 
 
-# --------------------------------------------------------------------------- #
-# Data loading                                                                #
-# --------------------------------------------------------------------------- #
-def _build_fresh() -> AuditResult:
+def _build_fresh() -> dict:
     stores = load_stores(with_mock_reviews=True)
     for s in stores:
         s.reviews = generate(s, n_clean=8, n_fake=4 if s.is_dirty else 1)
-    detections = [audit_store(s) for s in stores]
-    return AuditResult(used_real_agents=agent_available(), stores=stores, detections=detections)
+    reports = dispatch_scouts(stores)
+    decision = adjudicate(reports)
+    return {
+        "used_real_agents": agent_available(),
+        "stores": [s.model_dump(mode="json") for s in stores],
+        "reports": [r.model_dump(mode="json") for r in reports],
+        "decision": decision.model_dump(mode="json"),
+    }
 
 
 @st.cache_data(show_spinner="Auditing catalog...")
 def load_state_dict() -> dict:
     if RESULTS_PATH.exists():
-        return AuditResult.model_validate_json(RESULTS_PATH.read_text()).model_dump(mode="json")
-    return _build_fresh().model_dump(mode="json")
+        return json.loads(RESULTS_PATH.read_text())
+    return _build_fresh()
 
 
-def get_state() -> AuditResult:
+def get_state() -> dict:
     if "audit" not in st.session_state:
-        st.session_state.audit = AuditResult.model_validate(load_state_dict())
+        st.session_state.audit = load_state_dict()
     return st.session_state.audit
 
 
-def store_map(audit: AuditResult) -> dict[str, Store]:
-    return {s.store_id: s for s in audit.stores}
-
-
-def detection_map(audit: AuditResult) -> dict[str, DetectorOutput]:
-    return {d.store_id: d for d in audit.detections}
-
-
-# --------------------------------------------------------------------------- #
-# Actions                                                                     #
-# --------------------------------------------------------------------------- #
 def inject_attack(store_id: str, n: int = 4) -> None:
-    """Red drops subtle evasion fakes into a store; blue re-audits live."""
+    """Red drops subtle evasion fakes into a store; its isolated scout re-scores."""
     audit = get_state()
-    smap = store_map(audit)
+    stores = [Store.model_validate(s) for s in audit["stores"]]
+    smap = {s.store_id: s for s in stores}
     store = smap[store_id]
-    target = detection_map(audit).get(store_id)
-    new_fakes = evolve(store, n=n, target=target)
-    store.reviews.extend(new_fakes)
-    new_det = audit_store(store)
-    audit.detections = [new_det if d.store_id == store_id else d for d in audit.detections]
-    st.session_state.last_attack = (store_id, len(new_fakes))
+    store.reviews.extend(evolve(store, n=n))
+    new_report = scout_one(store)
+    reports = [ScoutReport.model_validate(r) for r in audit["reports"]]
+    reports = [new_report if r.seller_id == store_id else r for r in reports]
+    decision = adjudicate(reports)
+
+    audit["stores"] = [s.model_dump(mode="json") for s in stores]
+    audit["reports"] = [r.model_dump(mode="json") for r in reports]
+    audit["decision"] = decision.model_dump(mode="json")
+    st.session_state.last_attack = (store_id, n)
 
 
 def reset_state() -> None:
@@ -98,80 +94,74 @@ def reset_state() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# UI                                                                          #
-# --------------------------------------------------------------------------- #
 audit = get_state()
-smap = store_map(audit)
-dmap = detection_map(audit)
-ranked = audit.ranked()
+stores = {s["store_id"]: s for s in audit["stores"]}
+reports = {r["seller_id"]: r for r in audit["reports"]}
+decision = ConciergeDecision.model_validate(audit["decision"])
+ranked = sorted(audit["reports"], key=lambda r: r["trust_score"], reverse=True)
 
 st.title("🛡️ Trust Agentic Commerce")
-st.caption("Red-team agents plant fake reviews · Blue-team agents detect them · "
-           "stores ranked by trust.")
+st.caption("Red-team agents plant fake reviews · an ISOLATED blue scout audits each "
+           "store · the concierge adjudicates the structured reports and picks a winner.")
 
-# ---- Metric panel ----
-total_reviews = sum(d.total_reviews for d in audit.detections)
-total_fakes = sum(d.fake_count for d in audit.detections)
-avg_trust = sum(d.trust_score for d in audit.detections) / len(audit.detections) if audit.detections else 0
-mode = "🟢 REAL AGENTS" if audit.used_real_agents else "🟡 MOCK MODE"
+total_reviews = sum(len(s["reviews"]) for s in audit["stores"])
+avg_trust = sum(r["trust_score"] for r in audit["reports"]) / len(audit["reports"]) if audit["reports"] else 0
+mode = "🟢 REAL AGENTS" if audit.get("used_real_agents") else "🟡 MOCK MODE"
+winner_name = stores.get(decision.winner_seller_id, {}).get("name", decision.winner_seller_id)
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Stores audited", len(audit.stores))
+c1.metric("Stores audited", len(audit["stores"]))
 c2.metric("Reviews scanned", total_reviews)
-c3.metric("Fakes caught", total_fakes)
-c4.metric("Avg trust", f"{avg_trust:.0f}/100")
+c3.metric("Avg trust", f"{avg_trust:.0f}/100")
+c4.metric("Concierge pick", winner_name)
 c5.metric("Mode", mode)
+
+st.success(f"🛎️ **Concierge recommends: {winner_name}** — {decision.why}")
 
 if st.session_state.get("last_attack"):
     sid, k = st.session_state["last_attack"]
-    st.warning(f"Red injected {k} evasion fake(s) into **{smap[sid].name}** — blue re-audited. "
-               f"New trust score: **{dmap[sid].trust_score}/100**.")
+    st.warning(f"Red injected {k} evasion fake(s) into **{stores[sid]['name']}** — its isolated "
+               f"scout re-scored to **{reports[sid]['trust_score']:.0f}/100**. "
+               f"Concierge now picks **{winner_name}**.")
 
 with st.sidebar:
     st.header("Red vs. Blue")
-    st.write("Pick a store and let **red** inject subtle fakes, then watch **blue** re-score it.")
-    attack_target = st.selectbox("Target store", options=[s.store_id for s in audit.stores],
-                                 format_func=lambda sid: smap[sid].name)
+    st.write("Pick a store, let **red** inject subtle fakes, watch that store's "
+             "**isolated scout** re-score and the **concierge** re-decide.")
+    target = st.selectbox("Target store", options=list(stores.keys()),
+                          format_func=lambda sid: stores[sid]["name"])
     n_attack = st.slider("Fakes to inject", 1, 8, 4)
     st.button("💉 Inject Attack", type="primary", use_container_width=True,
-              on_click=inject_attack, args=(attack_target, n_attack))
+              on_click=inject_attack, args=(target, n_attack))
     st.divider()
     st.button("↺ Reset catalog", use_container_width=True, on_click=reset_state)
-    st.caption(f"codex CLI: {'available (real agents)' if agent_available() else 'absent (mock)'}")
+    st.caption(f"codex CLI: {'available' if agent_available() else 'absent (mock)'}")
 
 st.divider()
-
-# ---- Ranked catalog ----
-st.subheader("Ranked catalog")
-for rank, det in enumerate(ranked, start=1):
-    store = smap[det.store_id]
-    trust = det.trust_score
-    color = "🟢" if trust >= 80 else "🟠" if trust >= 50 else "🔴"
-    header = (f"{color}  #{rank}  {store.name}  —  trust {trust}/100  "
-              f"·  {store.category}  ·  ${store.price}  ·  {det.fake_count} fake / {det.total_reviews}")
+st.subheader("Ranked catalog (by isolated scout trust score)")
+for rank, rep in enumerate(ranked, start=1):
+    store = stores[rep["seller_id"]]
+    trust = rep["trust_score"]
+    color = "🟢" if trust >= 70 else "🟠" if trust >= 40 else "🔴"
+    crown = " 🛎️" if rep["seller_id"] == decision.winner_seller_id else ""
+    header = (f"{color}  #{rank}  {store['name']}{crown}  —  trust {trust:.0f}/100  ·  "
+              f"product {rep['product_score']:.0f}/100  ·  {rep['recommendation']}  ·  ${store['price']}")
     with st.expander(header, expanded=(rank == 1)):
-        meta = st.columns(4)
-        meta[0].metric("Trust", f"{trust}/100")
-        meta[1].metric("Flagged fake", det.fake_count)
-        meta[2].metric("Total reviews", det.total_reviews)
-        meta[3].metric("Feedback rounds", det.rounds)
-        st.caption(det.summary)
+        meta = st.columns(3)
+        meta[0].metric("Trust", f"{trust:.0f}/100")
+        meta[1].metric("Product fit", f"{rep['product_score']:.0f}/100")
+        meta[2].metric("Confidence", f"{rep['confidence']:.2f}")
+        if rep["risk_flags"]:
+            st.markdown("**🚩 Risk flags:** " + ", ".join(f"`{f}`" for f in rep["risk_flags"]))
         st.progress(min(1.0, trust / 100.0))
 
-        rmap = {r.review_id: r for r in store.reviews}
-        flagged = [v for v in det.verdicts if v.is_fake]
-        if flagged:
-            st.markdown("**🚩 Reviews blue flagged as fake (click-through evidence):**")
-            for v in sorted(flagged, key=lambda x: x.confidence, reverse=True):
-                r = rmap.get(v.review_id)
-                if not r:
-                    continue
-                st.markdown(f"> _{r.text}_  \n"
-                            f"— **{r.author}** · {r.rating}★ · confidence **{v.confidence:.2f}**")
-                signals = ", ".join(f"`{e.signal}` ({e.weight:g})" for e in v.evidence)
-                st.caption(f"Evidence: {signals or 'n/a'}")
-                with st.popover("Why flagged?"):
-                    for e in v.evidence:
-                        st.write(f"- **{e.signal}** (w={e.weight}): {e.detail}")
+        flagged_ids = {e["review_id"] for e in rep.get("evidence", [])}
+        if rep.get("evidence"):
+            st.markdown("**Why the scout was suspicious (click-through evidence):**")
+            rmap = {r["review_id"]: r for r in store["reviews"]}
+            for e in rep["evidence"]:
+                rv = rmap.get(e["review_id"])
+                quote = f"  \n> _{rv['text']}_ — {rv['author']}, {rv['rating']}★" if rv else ""
+                st.markdown(f"- **{e['signal']}** (w={e['weight']}): {e['detail']}{quote}")
         else:
-            st.success("No fakes flagged — blue considers this catalog entry clean.")
+            st.success("No risk signals — the scout considers this store clean.")

@@ -3,15 +3,20 @@ run.py -- the VERTICAL SLICE that wires everyone together.
 
 OWNER: Glue
 
-Pipeline:  load stores -> red.generate (per store) -> blue.audit -> write results.json
+Pipeline:  load stores -> red.generate (per store) -> blue concierge
+           (spawns one ISOLATED scout per store, then adjudicates) -> results.json
 
-This is the integration spine. If this runs green on a fresh clone with NO API keys,
-the team can develop their module in isolation and trust the seams.
+The blue side has ONE master agent now: blue/concierge_agent.py. It spawns the
+isolated scouts (blue/scout_agent.scout_one) and adjudicates their structured
+reports. (The old planner/orchestrator/analyzer/scraper agents were consolidated
+into the concierge.)
 
-    python run.py            # mock mode (no codex CLI) — always works
-    # install + `codex login`, then `python run.py`   -> real red+blue agents
+    python run.py            # mock mode (no keys) -- always works
 
-TODO(glue): add a --rounds flag and a --no-red flag (audit raw mock reviews only).
+MOCK-FIRST: a fresh clone with no LLM backend prints the ranked scouts + the
+concierge's pick and writes results.json for app/dashboard.py.
+
+TODO(glue): add a --contaminate LEVEL flag to seed fakes via data.stores.contaminated_stores.
 """
 
 from __future__ import annotations
@@ -19,11 +24,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from blue.orchestrator import audit_all
+from blue.concierge_agent import adjudicate, dispatch_scouts
 from data.stores import load_stores
 from llm import agent_available
 from red.generator import generate
-from schema import AuditResult
 from tracing import init_tracing
 
 RESULTS_PATH = Path(__file__).parent / "results.json"
@@ -32,14 +36,10 @@ RESULTS_PATH = Path(__file__).parent / "results.json"
 def main() -> None:
     init_tracing()
     real = agent_available()
-    mode = "REAL AGENTS" if real else "MOCK"
-    print(f"=== Trust Agentic Commerce :: {mode} mode ===\n")
+    print(f"=== Trust Agentic Commerce :: {'REAL AGENTS' if real else 'MOCK'} mode ===\n")
 
-    # 1. Load the catalog (mock reviews attached by default).
+    # 1. Load the catalog and have RED (re)generate each store's reviews.
     stores = load_stores(with_mock_reviews=True)
-
-    # 2. RED: regenerate each store's reviews via the generator.
-    #    (mock mode returns deterministic seeded reviews — same shape, no codex needed)
     for store in stores:
         store.reviews = generate(store, n_clean=8, n_fake=4 if store.is_dirty else 1)
         planted = sum(1 for r in store.reviews if r.is_fake)
@@ -48,15 +48,22 @@ def main() -> None:
 
     print()
 
-    # 3. BLUE: audit every store with the feedback-loop orchestrator.
-    detections = audit_all(stores)
-    for d in detections:
-        print(f"  blue | {d.store_id} trust={d.trust_score:5.1f} "
-              f"caught {d.fake_count}/{d.total_reviews} fakes in {d.rounds} round(s)")
+    # 2. BLUE concierge: spawn one isolated scout per store, then adjudicate.
+    reports = dispatch_scouts(stores)
+    for r in reports:
+        flags = ", ".join(r.risk_flags) or "none"
+        print(f"  scout | {r.seller_id} trust={r.trust_score:5.1f} {r.recommendation:10s} flags=[{flags}]")
+    decision = adjudicate(reports)
+    print(f"\n  concierge | winner={decision.winner_seller_id} :: {decision.why}")
 
-    # 4. Persist the artifact the dashboard reads.
-    result = AuditResult(used_real_agents=real, stores=stores, detections=detections)
-    RESULTS_PATH.write_text(result.model_dump_json(indent=2))
+    # 3. Persist the artifact the dashboard reads.
+    artifact = {
+        "used_real_agents": real,
+        "stores": [s.model_dump(mode="json") for s in stores],
+        "reports": [r.model_dump(mode="json") for r in reports],
+        "decision": decision.model_dump(mode="json"),
+    }
+    RESULTS_PATH.write_text(json.dumps(artifact, indent=2))
     print(f"\nWrote {RESULTS_PATH.name}. Now run:  streamlit run app/dashboard.py")
 
 
