@@ -1,11 +1,16 @@
 # Trust Agentic Commerce -- Python 3.11
-# Mock-first: a fresh clone runs with ZERO API keys. Keys only unlock real agents.
+# Mock-first: a fresh clone runs with NO LLM backend. Real agents only need the
+# `codex` CLI (installed separately), NOT a Python SDK / API key.
 
 pydantic>=2.6,<3
 streamlit>=1.33
 python-dotenv>=1.0
 
-# Real-agent path (optional at runtime, but installed so keys "just work")
-anthropic>=0.34
+# Optional: live tracing in tracing.py (no-op without WANDB_API_KEY)
 weave>=0.51
 pandas>=2.0
+
+# Real agents are driven by the Codex CLI (`codex exec`), installed out-of-band:
+#   npm install -g @openai/codex   # or: brew install codex
+#   codex login
+# No `anthropic` package needed.
