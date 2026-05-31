@@ -3,6 +3,7 @@
 
 # Generated artifacts
 results.json
+defense_results.json
 
 # Salminen holdout data (large / licensed — never commit)
 data/salminen_holdout/*.csv

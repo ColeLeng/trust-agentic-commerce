@@ -96,3 +96,46 @@ data/stores.py ──► red/generator.py ──► List[Review] ──► blue/
 
 Python 3.11 · Codex CLI `codex exec` (agents) · Weave/wandb (tracing) ·
 Pydantic (schema) · Streamlit (dashboard).
+
+---
+
+## v3: Context Isolation as a Defense (the money-shot)
+
+The headline architectural claim. A single-context shopping agent reads **every**
+seller's reviews in one window, so a dishonest seller's fake-review flood (and
+injected "system" instructions) can win past a contamination threshold. We defend
+by giving each seller its **own isolated scout**, then a **concierge** adjudicates
+only the scouts' *structured* outputs — never the raw seller text.
+
+```
+data/stores.contaminated_stores(level)
+        │
+        ├─► baseline/buyer_agent.choose()      # CONTROL: reads ALL sellers in ONE context
+        │        └─► BaselineDecision           # gets contaminated past a threshold
+        │
+        └─► blue/planner_agent.plan_and_dispatch()
+                 └─► blue/scout_agent.scout_one()  ×N   # ISOLATED: one seller, one context
+                          └─► ScoutReport[]
+                                   └─► blue/concierge_agent.adjudicate()  # structured-only
+                                            └─► ConciergeDecision
+experiments/contamination_sweep.py  ──► defense_results.json ──► app/defense_dashboard.py
+```
+
+Run it (mock-first — works with no API key):
+
+```bash
+python experiments/contamination_sweep.py     # prints the contamination table
+streamlit run app/defense_dashboard.py         # the visual money-shot
+```
+
+Expected money-shot: the **baseline** flips to a dishonest seller around **40%**
+contamination, while the **isolated** system keeps picking an honest seller at
+every level.
+
+This layer is **purely additive**: it reuses the existing `blue/scout_agent`
+(`scout_one`/`ScoutReport`, isolated per seller), `schema.Store`, and
+`data/stores.py`. New pieces: `blue/planner_agent.py`, `blue/concierge_agent.py`,
+`baseline/buyer_agent.py`, `experiments/contamination_sweep.py`,
+`app/defense_dashboard.py`, plus `data.stores.contaminated_stores(level)`.
+`ConciergeDecision` / `BaselineDecision` live with their agents (like `ScoutReport`)
+so the frozen `schema.py` contract is untouched.
