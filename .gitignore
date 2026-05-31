@@ -1,0 +1,27 @@
+# Secrets
+.env
+
+# Generated artifacts
+results.json
+
+# Salminen holdout data (large / licensed — never commit)
+data/salminen_holdout/*.csv
+data/salminen_holdout/*.json
+data/salminen_holdout/*.tsv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Weave / wandb
+wandb/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

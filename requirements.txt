@@ -1,0 +1,11 @@
+# Trust Agentic Commerce -- Python 3.11
+# Mock-first: a fresh clone runs with ZERO API keys. Keys only unlock real agents.
+
+pydantic>=2.6,<3
+streamlit>=1.33
+python-dotenv>=1.0
+
+# Real-agent path (optional at runtime, but installed so keys "just work")
+anthropic>=0.34
+weave>=0.51
+pandas>=2.0
