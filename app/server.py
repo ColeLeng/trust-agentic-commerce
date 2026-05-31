@@ -84,33 +84,47 @@ _CONTENT_TYPES = {
 
 
 WARM_LEVELS = [0.0, 0.2, 0.4, 0.6]
+WARM_CATEGORIES = ["Beauty", "Electronics", "Sports & Outdoors",
+                   "Health & Household", "All"]
 
 
 def warm_all_levels() -> None:
-    """Populate the cache for every contamination level so each selector switch is
-    instant during a demo. Runs sequentially (each level already parallelizes its
-    6 isolated scouts); safe to run in a background daemon thread."""
-    for lvl in WARM_LEVELS:
+    """Populate the cache for the common selector paths so switches are instant:
+    every category at the default level, plus the default category across all
+    levels. Rarer combos lazy-load once on first use. Runs sequentially in a
+    background daemon thread (each run already parallelizes its isolated scouts)."""
+    dft_level = DEFAULT_SCENARIO.get("level", 0.4)
+    dft_cat = DEFAULT_SCENARIO.get("category", "Beauty")
+    combos = ([(dft_level, c) for c in WARM_CATEGORIES]
+              + [(lvl, dft_cat) for lvl in WARM_LEVELS])
+    seen = set()
+    for lvl, cat in combos:
+        if (lvl, cat) in seen:
+            continue
+        seen.add((lvl, cat))
         try:
-            get_trace(level=lvl)
-            print(f"[server] warmed contamination level {lvl:.0%}")
+            get_trace(level=lvl, category=cat)
+            print(f"[server] warmed {cat} @ {lvl:.0%}")
         except Exception as exc:  # never let warming kill the server
-            print(f"[server] warm {lvl:.0%} failed: {exc}")
+            print(f"[server] warm {cat} @ {lvl:.0%} failed: {exc}")
 
 
-def get_trace(fresh: bool = False, level: float | None = None) -> dict:
+def get_trace(fresh: bool = False, level: float | None = None,
+              category: str | None = None) -> dict:
     """Run (or fetch cached) the full buyer-journey audit and return its trace.
 
-    fresh=True re-executes the whole pipeline (planner -> per-seller scout -> the
-    four sub-agents for every store), which logs a NEW Weave trace — so the Re-run
-    button produces a fresh set of agent actions you can watch in Weave.
+    fresh=True re-executes the whole pipeline (concierge dispatch -> per-seller
+    scout -> the four sub-agents for every store), which logs a NEW Weave trace —
+    so the Re-run button produces a fresh set of agent actions you can watch.
+    `category` focuses the audit on one product type (None/All = full marketplace).
     """
     lvl = DEFAULT_SCENARIO.get("level", 0.4) if level is None else level
-    key = f"L{lvl}"
+    cat = DEFAULT_SCENARIO.get("category") if category is None else category
+    key = f"L{lvl}|C{cat}"
     with _CACHE_LOCK:
         if not fresh and key in _CACHE:
             return _CACHE[key]
-    trace = build_trace({"level": lvl})
+    trace = build_trace({"level": lvl, "category": cat})
     trace["weaveActive"] = _WEAVE_ACTIVE
     trace["weaveUrl"] = _WEAVE_URL
     with _CACHE_LOCK:
@@ -158,8 +172,9 @@ class Handler(BaseHTTPRequestHandler):
                 level = float(l_raw) if l_raw is not None else None
             except ValueError:
                 level = None
+            category = (qs.get("category") or [None])[0]
             try:
-                self._send_json(get_trace(fresh=fresh, level=level))
+                self._send_json(get_trace(fresh=fresh, level=level, category=category))
             except Exception as exc:  # never let the demo crash the page
                 import traceback
                 traceback.print_exc()

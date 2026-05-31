@@ -58,8 +58,35 @@ from tracing import traced
 # Buyer scenario. `level` selects the real-data contamination sweep variant
 # (None -> the standard load_stores catalog). Swap personalContext freely.
 # --------------------------------------------------------------------------- #
+# Per-category buyer intent. Selecting a category focuses the audit on the sellers
+# offering that kind of product, so the buyer's question is concrete and coherent
+# (a head-to-head of sellers of the SAME product) instead of a mixed-bag marketplace.
+CATEGORY_PROFILES: dict = {
+    "Beauty": {
+        "product": "daily skincare moisturizer",
+        "budget": 20.0,
+        "question": "Find me a trustworthy daily skincare moisturizer under $20 — genuine reviews, no fake-review hype.",
+    },
+    "Electronics": {
+        "product": "portable power bank / charger",
+        "budget": 45.0,
+        "question": "Find me a trustworthy portable charger — real reviews and a fair price.",
+    },
+    "Sports & Outdoors": {
+        "product": "insulated water bottle",
+        "budget": 50.0,
+        "question": "Find me a trustworthy insulated water bottle from a seller my agent can transact with safely.",
+    },
+    "Health & Household": {
+        "product": "daily supplement",
+        "budget": 35.0,
+        "question": "Find me a trustworthy daily supplement — genuine reviews, no review manipulation.",
+    },
+}
+
 DEFAULT_SCENARIO: dict = {
     "buyerName": "Mara Okafor",
+    "category": "Beauty",   # None / "All" -> full mixed marketplace
     "question": "Find me the most trustworthy seller with genuine reviews and a fair price.",
     "vertical": "Mixed Amazon marketplace — electronics, beauty, health, outdoors",
     "level": 0.4,            # contamination level for the real sweep data (0..0.6)
@@ -244,7 +271,7 @@ def _review_dict(r) -> dict:
 @traced
 def run_audit(scenario: dict) -> dict:
     sc = {**DEFAULT_SCENARIO, **(scenario or {})}
-    ctx = sc["personalContext"]
+    ctx = dict(sc["personalContext"])
     client = _client()
     used_real = client is not None
 
@@ -253,6 +280,19 @@ def run_audit(scenario: dict) -> dict:
         stores = contaminated_stores(float(level))
     else:
         stores = load_stores(n=int(sc.get("reviewsPerStore", 12)))
+
+    # Category focus: shop ONE product type so the buyer's question is concrete.
+    category = sc.get("category")
+    question = sc["question"]
+    vertical = sc.get("vertical", "")
+    if category and category not in ("All", "all", "*"):
+        profile = CATEGORY_PROFILES.get(category, {})
+        stores = [s for s in stores if s.category == category]
+        question = profile.get("question", question)
+        if profile.get("budget") is not None:
+            ctx["budget"] = profile["budget"]
+        prod = profile.get("product", category.lower())
+        vertical = f"Shopping a {prod} · {category}"
 
     scouted = planner_dispatch(stores, client)
     reports = [scouted[s.store_id][1] for s in stores]
@@ -328,8 +368,9 @@ def run_audit(scenario: dict) -> dict:
     return {
         "buyer": {
             "name": sc.get("buyerName", "Buyer"),
-            "question": sc["question"],
-            "vertical": sc.get("vertical", ""),
+            "question": question,
+            "vertical": vertical,
+            "category": category,
             "nStores": len(stores),
             "level": level,
             "personalContext": ctx,

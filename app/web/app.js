@@ -25,10 +25,11 @@ function highlight(text, evidences) {
 
 async function loadTrace({ fresh = false, spin = false } = {}) {
   const level = $("levelSel").value;
+  const category = $("categorySel").value;
   if (spin) $("rerunBtn").classList.add("busy");
   $("loading").classList.remove("hidden");
   try {
-    const res = await fetch(`/api/run?level=${level}&fresh=${fresh ? 1 : 0}`);
+    const res = await fetch(`/api/run?level=${level}&category=${encodeURIComponent(category)}&fresh=${fresh ? 1 : 0}`);
     const trace = await res.json();
     if (trace.error) { alert("Pipeline error: " + trace.error); return; }
     state.trace = trace;
@@ -346,6 +347,7 @@ function closeDrawer() { $("drawer").classList.add("hidden"); }
 // ---------- wire-up ----------
 $("rerunBtn").addEventListener("click", () => loadTrace({ fresh: true, spin: true }));
 $("levelSel").addEventListener("change", () => loadTrace({ fresh: false }));
+$("categorySel").addEventListener("change", () => loadTrace({ fresh: false }));
 $("drawerBackdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(drawEdges, 120); });
