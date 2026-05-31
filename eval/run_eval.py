@@ -3,9 +3,10 @@ eval/run_eval.py -- honest precision/recall of BLUE on the Salminen holdout.
 
 OWNER: Blue / Eval
 
-Blue is NEVER tuned on this set. We feed the labeled Salminen reviews through the
-same analyzer blue uses in production and report precision / recall / F1 on the
-"is this a fake?" task. This is the credibility number for the demo.
+Blue is NEVER tuned on this set. We run the same per-review fake signals the
+isolated scout relies on (blue/scout_agent) over the labeled Salminen reviews and
+report precision / recall / F1 on the "is this a fake?" task. This is the
+credibility number for the demo.
 
     python eval/run_eval.py
 
@@ -15,7 +16,7 @@ CSV in (see data/salminen_holdout/README.md) to get the real numbers.
 
 TODO(eval):
   - Report per-category breakdown once the real CSV is present.
-  - Sweep DECISION_THRESHOLD and print a precision/recall curve.
+  - Sweep the threshold and print a precision/recall curve.
 """
 
 from __future__ import annotations
@@ -28,8 +29,24 @@ from typing import List, Tuple
 # allow `python eval/run_eval.py` from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from blue.analyzer_agent import analyze  # noqa: E402
 from schema import Review, ReviewSource  # noqa: E402
+
+# Per-review fake signals (the same cues the isolated scout keys on). Kept inline
+# here so eval has no agent dependency.
+_GENERIC = ["best product ever", "best ever", "changed my life", "amazing quality",
+            "buy it now", "best purchase", "no regrets", "just wow", "absolutely perfect",
+            "10/10", "highly recommend", "best seller", "everyone needs"]
+
+
+def _predict_fake(review: Review) -> bool:
+    low = review.text.lower()
+    if any(p in low for p in _GENERIC):
+        return True
+    if review.text.count("!") >= 3:
+        return True
+    if review.rating >= 5.0 and not review.verified_purchase and len(review.text) < 60:
+        return True
+    return False
 
 HOLDOUT_DIR = Path(__file__).parent.parent / "data" / "salminen_holdout"
 
@@ -108,12 +125,10 @@ def _metrics(preds: List[bool], labels: List[bool]) -> dict:
 
 def main() -> None:
     reviews, labels = _load_holdout()
-    verdicts, _ = analyze(reviews)
-    by_id = {v.review_id: v for v in verdicts}
-    preds = [by_id[r.review_id].is_fake for r in reviews]
+    preds = [_predict_fake(r) for r in reviews]
 
     m = _metrics(preds, labels)
-    print("\n=== BLUE vs. Salminen holdout (heuristic analyzer) ===")
+    print("\n=== BLUE vs. Salminen holdout (scout per-review signals) ===")
     print(f"  n          : {m['n']}")
     print(f"  precision  : {m['precision']:.3f}")
     print(f"  recall     : {m['recall']:.3f}")

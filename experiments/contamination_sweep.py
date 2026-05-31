@@ -26,8 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from baseline.buyer_agent import choose  # noqa: E402
-from blue.concierge_agent import adjudicate  # noqa: E402
-from blue.planner_agent import plan_and_dispatch  # noqa: E402
+from blue.concierge_agent import adjudicate, dispatch_scouts  # noqa: E402
 from data.stores import STORES, contaminated_stores, honest_store_ids  # noqa: E402
 from tracing import init_tracing  # noqa: E402
 
@@ -46,7 +45,7 @@ def run_sweep(levels=None) -> dict:
         honest = honest_store_ids(stores)
 
         baseline = choose(stores)
-        reports = plan_and_dispatch(stores)
+        reports = dispatch_scouts(stores)   # concierge spawns one isolated scout per seller
         decision = adjudicate(reports)
 
         experiments.append({
