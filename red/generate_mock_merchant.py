@@ -388,7 +388,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     out_dir: Path = args.out
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if out_dir.exists():
+        raise SystemExit(
+            f"Output directory already exists: {out_dir}. "
+            "Choose a unique --out path for each merchant or remove the "
+            "existing directory before regenerating it."
+        )
+    out_dir.mkdir(parents=True, exist_ok=False)
 
     ucp_path = out_dir / "ucp.json"
     agent_card_path = out_dir / "agent_card.json"

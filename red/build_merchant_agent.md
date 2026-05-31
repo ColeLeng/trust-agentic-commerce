@@ -18,13 +18,13 @@ python red/generate_mock_merchant.py \
   --include-discount
 ```
 
-The output directory is temporary test data. Do not commit generated output unless a test fixture explicitly requires it.
+The output directory is temporary test data. Do not commit generated output unless a test fixture explicitly requires it. The script refuses to write into an existing output directory; choose a unique `--out` path for every merchant.
 
 ## Argument guide
 
 | Argument | Required? | What to enter |
 | --- | --- | --- |
-| `--out` | Yes | Directory where generated files should be written. Prefer a scratch path such as `./red/mock_merchant_data` or `/tmp/mock_merchant_data`. |
+| `--out` | Yes | Directory where generated files should be written. Use a unique scratch path per merchant, such as `/tmp/trust-agentic-commerce-merchants/<run-id>/<level>/<merchant-slug>`. |
 | `--merchant-name` | Yes | Customer-facing merchant name displayed in the generated agent card. |
 | `--organization` | Yes | Legal or provider organization name for the agent-card `provider.organization` field. |
 | `--base-url` | Yes | URL where the merchant agent will be served. This value is used for the agent-card URL, UCP A2A endpoint, and product image URLs. |
@@ -34,6 +34,33 @@ The output directory is temporary test data. Do not commit generated output unle
 | `--payment-handler-id` | Yes | Payment handler ID written to the UCP payment handler metadata. |
 | `--payment-handler-name` | Yes | Payment handler name written to the UCP payment handler metadata. |
 | `--include-discount` | No | Add this flag when the merchant should advertise `dev.ucp.shopping.discount` in addition to checkout and fulfillment. Omit it when the merchant should not advertise discounts. |
+
+## Concurrent merchant runs
+
+Use a run-scoped temp root when creating more than one merchant at a time:
+
+```text
+/tmp/trust-agentic-commerce-merchants/<run-id>/
+  level_1_seo_spammer/<merchant-slug>/
+  level_2_structured_data_liar/<merchant-slug>/
+  level_3_prompt_injector/<merchant-slug>/
+  level_4_bait_and_switcher/<merchant-slug>/
+  level_5_collusive_seller_network/<merchant-slug>/
+```
+
+Rules for concurrent creation:
+
+1. Generate exactly one merchant per leaf `--out` directory.
+2. Never reuse the same `--out` directory for two merchants or two concurrent processes.
+3. Let each merchant keep its own `temp_files_manifest.json`; this avoids a shared manifest write bottleneck.
+4. To share a run with future agents, give them the run root and tell them to inspect each merchant manifest.
+5. Future agents can discover generated merchants with:
+
+```bash
+find /tmp/trust-agentic-commerce-merchants/<run-id> -name temp_files_manifest.json -print
+```
+
+Each manifest records the absolute output directory, the exact input arguments, the generated files, and a cleanup hint.
 
 ## Generated temporary files
 
