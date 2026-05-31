@@ -103,8 +103,9 @@ function renderPlanner(t) {
     <div class="planner-top">
       <div class="planner-ic">◇</div>
       <div class="planner-title">Planner agent
-        <small>· dispatches the scouts (fan-out)</small>
+        <small>· dispatches one isolated scout per seller</small>
       </div>
+      <span class="role-tag dispatch">▶ dispatch · fan-out</span>
     </div>
     <div class="planner-why">${esc(p.note)} Each scout sees only its own seller — contamination can't cross context boundaries.</div>`;
 }
@@ -116,8 +117,9 @@ function renderConcierge(t) {
     <div class="planner-top">
       <div class="planner-ic" style="background:#1d3a2c;color:var(--green)">♚</div>
       <div class="planner-title">Concierge agent
-        <small>· consumes ${t.sellers.length} scout reports → final decision</small>
+        <small>· gathers the ${t.sellers.length} scout reports → picks &amp; buys</small>
       </div>
+      <span class="role-tag decide">◀ decision · checkout</span>
     </div>
     <div class="planner-why">${winner ? `Buys from <span class="planner-winner">${esc(winner.name)}</span>. ` : ""}${esc(c.why)}</div>`;
 }
