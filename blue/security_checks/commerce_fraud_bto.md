@@ -22,6 +22,8 @@ An attacker compromises an agent control plane, steals session tokens, or obtain
 4. Flag clean-path repeated purchases with no browsing, comparison, or user-visible selection rationale.
 5. Validate payment handler IDs and business IDs against known merchant identity records.
 6. Require step-up confirmation if checkout uses a new seller, new shipping address, new payment handler, or unusually high spend.
+7. Detect attempts to reuse a mandate across multiple carts, merchants, sessions, recipients, or payment handlers.
+8. Compare final checkout payload against the user-visible cart; block if line items, fees, seller, recipient, or shipping destination differ.
 
 ## Risk Signals
 
@@ -30,6 +32,8 @@ An attacker compromises an agent control plane, steals session tokens, or obtain
 - `rapid_spend`: repeated purchases or quick max-limit consumption.
 - `clean_path_drain`: direct API checkout without normal discovery evidence.
 - `identity_mismatch`: provider, business ID, payment handler, or seller domain do not align.
+- `mandate_replay`: the same mandate or token appears across multiple checkout attempts.
+- `cart_mismatch`: executor payload differs from the cart shown to the user.
 
 ## Required Controls
 
@@ -37,6 +41,8 @@ An attacker compromises an agent control plane, steals session tokens, or obtain
 - Bind each mandate to merchant identity, item allowlist, spend cap, quantity cap, and expiration.
 - Require independent user confirmation for high-liquidity goods and any cart mutation after initial approval.
 - Rate-limit agent purchases by user, merchant, category, and payment instrument.
+- Bind mandate IDs to one checkout attempt and one merchant identity.
+- Require user-visible itemized totals, including taxes, fees, discounts, gift cards, and subscriptions.
 
 ## Output Expectations
 
