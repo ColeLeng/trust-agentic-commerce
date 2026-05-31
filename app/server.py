@@ -3,21 +3,23 @@ app/server.py -- the VISUAL DEMO server (zero extra dependencies).
 
 OWNER: Glue
 
-A tiny stdlib http.server that powers the demo UI in app/web/. It does two things:
+A tiny stdlib http.server that powers the buyer-journey UI in app/web/:
 
-  GET  /                      -> serves the single-page visualization (app/web)
-  GET  /api/run?strategy=...  -> LIVE-TRIGGERS the full agent pipeline for one
-                                 contamination strategy and returns the complete
-                                 data-flow trace (what every agent consumed +
-                                 produced) as JSON.
+  GET  /                   -> serves the single-page visualization (app/web)
+  GET  /api/run            -> LIVE-RUNS the journey audit (planner -> per-seller
+                              scouts -> 4 sub-agents -> concierge) and returns the
+                              full data-flow trace as JSON.
+                              ?stores=N  pick the marketplace size (2..12)
+                              ?fresh=1   bust the cache + log a NEW Weave trace
+  GET  /api/checks         -> the four blue security sub-agent definitions
+  GET  /api/tracing        -> Weave status + dashboard URL
 
-The browser hits /api/run, which runs the same `build_audit` code path as run.py
-(mock-first: works on a fresh clone with no codex CLI), then reconstructs a trace
-via app/trace.build_trace. Results are cached per strategy so re-rendering /
-re-sliding the contamination level is instant.
+The trace is produced by app/demo_engine.build_trace (deterministic + mock-first:
+no LLM backend, runs identically on a fresh clone). Results are cached per store
+count so re-rendering is instant; the Re-run button passes fresh=1.
 
     python -m app.server            # then open http://localhost:8000
-    python -m app.server --port 8001
+    python -m app.server --port 8011 --warm
 
 No Flask/FastAPI: uses only the standard library so the demo never goes dark.
 """
@@ -45,21 +47,12 @@ try:
 except Exception:
     pass
 
-# DEMO DEFAULT = MOCK MODE. The contamination slider re-renders instantly and the
-# money-shot is deterministic. Real agents (each isolated scout = one Claude call)
-# are slow per sweep, so they're opt-in: launch with DEMO_REAL=1 to use them. The
-# scout/baseline gate on ANTHROPIC_API_KEY, so we drop it from the environment for
-# the demo unless real mode is explicitly requested.
-_REAL = os.getenv("DEMO_REAL", "").lower() in ("1", "true", "yes")
-if not _REAL:
-    os.environ.pop("ANTHROPIC_API_KEY", None)
-
 from app.demo_engine import DEFAULT_SCENARIO, build_trace  # noqa: E402
 from tracing import init_tracing  # noqa: E402
 
-# Activate Weave once at import. Every @traced agent call (planner, each isolated
-# scout, concierge, baseline) is then logged to the Weave project so you can watch
-# every agent action when the system runs.
+# Activate Weave once at import. Every @traced agent step (planner fan-out, each
+# per-seller scout, the four sub-agents, the concierge) is logged to the Weave
+# project so you can watch every agent action when the journey runs.
 _WEAVE_ACTIVE = init_tracing()
 _WEAVE_PROJECT = os.getenv("WEAVE_PROJECT", "trust-agentic-commerce")
 _WEAVE_ENTITY = os.getenv("WEAVE_ENTITY", "")
@@ -98,7 +91,7 @@ def get_trace(fresh: bool = False, n_stores: int | None = None) -> dict:
     scenario = None
     if n_stores:
         scenario = {"nStores": max(2, min(12, int(n_stores)))}
-    trace = build_trace(scenario, used_real=_REAL)
+    trace = build_trace(scenario)
     trace["weaveActive"] = _WEAVE_ACTIVE
     trace["weaveUrl"] = _WEAVE_URL
     with _CACHE_LOCK:
@@ -183,10 +176,10 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--warm", action="store_true",
-                        help="Pre-run the sweep before serving (instant first paint).")
+                        help="Pre-run the audit before serving (instant first paint).")
     args = parser.parse_args()
 
-    print(f"[server] mode: {'REAL AGENTS (ANTHROPIC_API_KEY)' if _REAL else 'MOCK (deterministic)'}")
+    print("[server] mode: MOCK (deterministic engine, no LLM backend)")
     if _WEAVE_ACTIVE:
         print(f"[server] Weave tracing ON -> {_WEAVE_URL or '(set WEAVE_ENTITY for a direct link)'}")
     else:
