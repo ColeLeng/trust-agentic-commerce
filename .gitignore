@@ -4,6 +4,7 @@
 # Generated artifacts
 results.json
 defense_results.json
+red/mock_merchant_data/
 
 # Salminen holdout data (large / licensed — never commit)
 data/salminen_holdout/*.csv
