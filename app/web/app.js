@@ -4,7 +4,6 @@ const $ = (id) => document.getElementById(id);
 const state = { trace: null };
 
 const COLOR_VAR = { green: "--green", lime: "--lime", amber: "--amber", orange: "--orange", red: "--red" };
-const CHECK_ICON = { syringe: "⚠", "credit-card": "▣", store: "◫", rotate: "↺" };
 
 function esc(s) {
   return String(s == null ? "" : s)
@@ -25,11 +24,12 @@ function highlight(text, evidences) {
 }
 
 async function loadTrace({ fresh = false, spin = false } = {}) {
-  const stores = $("storesSel").value;
+  const level = $("levelSel").value;
+  const category = $("categorySel").value;
   if (spin) $("rerunBtn").classList.add("busy");
   $("loading").classList.remove("hidden");
   try {
-    const res = await fetch(`/api/run?stores=${stores}&fresh=${fresh ? 1 : 0}`);
+    const res = await fetch(`/api/run?level=${level}&category=${encodeURIComponent(category)}&fresh=${fresh ? 1 : 0}`);
     const trace = await res.json();
     if (trace.error) { alert("Pipeline error: " + trace.error); return; }
     state.trace = trace;
@@ -54,7 +54,7 @@ function renderAll(t) {
 
 function renderBadges(t) {
   const m = $("modeBadge");
-  m.textContent = t.usedRealAgents ? "REAL AGENTS" : "MOCK";
+  m.textContent = t.usedRealAgents ? "LIVE CLAUDE" : "MOCK";
   m.className = "badge " + (t.usedRealAgents ? "real" : "mock");
   const w = $("weaveBadge");
   if (t.weaveActive && t.weaveUrl) { w.href = t.weaveUrl; w.classList.remove("hidden"); }
@@ -79,6 +79,10 @@ function renderBuyer(t) {
       <div class="budget">$${Number(c.budget).toFixed(0)}</div>
     </div>
     <div class="ctx-block">
+      <div class="ctx-label">Marketplace</div>
+      <div class="notes">${b.nStores} sellers audited in isolation</div>
+    </div>
+    <div class="ctx-block">
       <div class="ctx-label">Priorities</div>
       <div class="chips">${(c.priorities || []).map(p => `<span class="chip">${esc(p)}</span>`).join("")}</div>
     </div>
@@ -101,13 +105,13 @@ function renderPlanner(t) {
   const p = t.planner;
   $("plannerNode").innerHTML = `
     <div class="planner-top">
-      <div class="planner-ic">◇</div>
-      <div class="planner-title">Planner agent
-        <small>· dispatches one isolated scout per seller</small>
+      <div class="planner-ic" style="background:#1d3a2c;color:var(--green)">♚</div>
+      <div class="planner-title">Concierge agent
+        <small>· the single blue master agent — dispatch phase</small>
       </div>
-      <span class="role-tag dispatch">▶ dispatch · fan-out</span>
+      <span class="role-tag dispatch">① dispatch · fan-out</span>
     </div>
-    <div class="planner-why">${esc(p.note)} Each scout sees only its own seller — contamination can't cross context boundaries.</div>`;
+    <div class="planner-why">${esc(p.note)} The master agent spawns one context-isolated scout per seller — a fake-review flood in one storefront can't pollute another's evaluation.</div>`;
 }
 
 function renderConcierge(t) {
@@ -117,9 +121,9 @@ function renderConcierge(t) {
     <div class="planner-top">
       <div class="planner-ic" style="background:#1d3a2c;color:var(--green)">♚</div>
       <div class="planner-title">Concierge agent
-        <small>· gathers the ${t.sellers.length} scout reports → picks &amp; buys</small>
+        <small>· same master agent — decision phase, adjudicates ${t.sellers.length} structured reports</small>
       </div>
-      <span class="role-tag decide">◀ decision · checkout</span>
+      <span class="role-tag decide">② adjudicate · trust-gated checkout</span>
     </div>
     <div class="planner-why">${winner ? `Buys from <span class="planner-winner">${esc(winner.name)}</span>. ` : ""}${esc(c.why)}</div>`;
 }
@@ -133,15 +137,16 @@ function sellerCheckSeverity(seller, checkId) {
 function renderSellers(t) {
   const grid = $("sellerGrid");
   const winnerId = t.concierge.winnerSellerId;
-  // concierge ranking order
-  const order = t.concierge.ranking || t.sellers.map(s => s.sellerId);
+  const order = t.concierge.ranking && t.concierge.ranking.length
+    ? t.concierge.ranking : t.sellers.map(s => s.sellerId);
   const byId = Object.fromEntries(t.sellers.map(s => [s.sellerId, s]));
+  const budget = t.buyer.personalContext.budget;
   grid.innerHTML = order.map(id => byId[id]).filter(Boolean).map(s => {
     const a = s.audit;
     const color = cssVar(COLOR_VAR[a.color] || "--line-2");
     const isWinner = s.sellerId === winnerId;
     const blocked = a.overallDecision === "block";
-    const anomaly = s.price < 0.6 * s.marketReference;
+    const overBudget = budget > 0 && s.price > budget;
     const checks = t.checks.map(c => {
       const sev = sellerCheckSeverity(s, c.id);
       const cls = sev === "pass" ? "pass" : (sev === "low" ? "medium" : sev);
@@ -154,15 +159,15 @@ function renderSellers(t) {
       <div class="seller-top">
         <div>
           <div class="seller-name">${isWinner ? '<span class="crown">♚</span> ' : ""}${esc(s.name)}</div>
-          <div class="seller-id">${esc(s.sellerId)}</div>
+          <div class="seller-id">${esc(s.category)} · ${esc(s.sellerId)}</div>
         </div>
         <span class="decision d-${a.overallDecision}">${a.overallDecision.replace(/_/g, " ")}</span>
       </div>
-      <div class="seller-price ${anomaly ? "price-anomaly" : ""}">$${Number(s.price).toFixed(2)}
-        <small>/ mkt $${Number(s.marketReference).toFixed(0)}</small></div>
-      <div class="seller-domain">${esc(s.domain)}</div>
+      <div class="seller-price ${overBudget ? "price-anomaly" : ""}">$${Number(s.price).toFixed(2)}
+        <small>${overBudget ? "over budget" : "within budget"}</small></div>
+      <div class="seller-domain">${s.reviewsTotal} reviews · ${s.reviewsVerified} verified${s.reviewsFake ? ` · <span style="color:var(--red)">${s.reviewsFake} planted fakes</span>` : ""}</div>
       ${meter("Trust", a.trustScore, color)}
-      ${meter("Fit", a.fitScore, cssVar("--accent"))}
+      ${meter("Product", a.productScore, cssVar("--accent"))}
       <div class="checks-row">${checks}</div>
     </div>`;
   }).join("");
@@ -187,22 +192,22 @@ function renderTruth(t) {
       ${winnerOk ? "✓ Concierge bought from a clean seller" : "✗ Concierge picked a contaminated seller"}
     </div>
     <div class="score-grid">
-      <div class="score-cell"><div class="score-num" style="color:var(--green)">${(sb.recall*100).toFixed(0)}%</div><div class="score-cap">attacks caught</div></div>
+      <div class="score-cell"><div class="score-num" style="color:var(--green)">${(sb.recall*100).toFixed(0)}%</div><div class="score-cap">dirty caught</div></div>
       <div class="score-cell"><div class="score-num" style="color:var(--accent)">${(sb.precision*100).toFixed(0)}%</div><div class="score-cap">precision</div></div>
       <div class="score-cell"><div class="score-num">${sb.nDirty}</div><div class="score-cap">dirty sellers</div></div>
-      <div class="score-cell"><div class="score-num">${sb.nClean}</div><div class="score-cap">clean sellers</div></div>
+      <div class="score-cell"><div class="score-num">${sb.plantedFakesTotal}</div><div class="score-cap">planted fakes</div></div>
     </div>
-    <div class="ctx-label" style="margin-bottom:6px">Hidden labels (never seen by agents)</div>
+    <div class="ctx-label" style="margin-bottom:6px">Hidden labels (never seen by scouts)</div>
     ${t.sellers.map(s => {
       const dirty = s.groundTruth.dirty;
-      const flagged = s.audit.overallDecision !== "allow";
+      const flagged = s.audit.recommendation !== "safe";
       const correct = dirty === flagged;
       return `<div class="truth-row">
         <span style="display:flex;align-items:center;gap:7px">
           <span class="truth-dot ${dirty ? "truth-dirty" : "truth-clean"}"></span>${esc(s.name)}
         </span>
-        <span class="${correct ? "tag-match" : "tag-miss"}" title="${esc(s.groundTruth.attacks.join(", ") || "clean")}">
-          ${dirty ? "✕ " + s.groundTruth.attacks.length + " atk" : "✓ clean"}
+        <span class="${correct ? "tag-match" : "tag-miss"}" title="${dirty ? s.groundTruth.plantedFakes + " planted fake reviews" : "genuine reviews"}">
+          ${dirty ? "✕ " + s.groundTruth.plantedFakes + " fakes" : "✓ clean"}
         </span>
       </div>`;
     }).join("")}`;
@@ -253,21 +258,11 @@ function drawEdges() {
 }
 
 // ---------- drawer ----------
-function fieldForPath(path) {
-  if (path.includes("description")) return "description";
-  if (path.includes("policies.return")) return "returnPolicy";
-  if (path.includes("payment")) return "paymentHandler";
-  if (path.includes("offers.price")) return "price";
-  if (path.includes("provider.url")) return "providerUrl";
-  if (path.includes("supportChannel") || path.includes("identity")) return "identity";
-  if (path.includes("image")) return "imageUrl";
-  return "other";
-}
-
 function openDrawer(seller) {
   const t = state.trace;
   const a = seller.audit;
   const decClass = "d-" + a.overallDecision;
+
   const subHtml = a.subAgents.map(r => {
     const meta = t.checks.find(c => c.id === r.agent) || {};
     const head = `<div class="sa-head">
@@ -282,47 +277,49 @@ function openDrawer(seller) {
       <div class="finding">
         <div class="finding-top">
           <span class="sev ${f.severity}">${f.severity}</span>
-          <span class="loc">${esc(f.sourceFile)} · ${esc(f.sourcePath)}</span>
+          <span class="loc">signal: ${esc(f.signal)} · ${esc(f.id)}</span>
         </div>
         <div class="evidence">${highlight(f.evidence, [f.evidence])}</div>
         <div class="finding-reason">${esc(f.reason)}</div>
-        <div class="finding-control">${esc(f.recommendedControl)}</div>
       </div>`).join("");
-    const constraints = r.requiredConstraints.length
-      ? `<div class="finding"><div class="constraints">${r.requiredConstraints.map(c => `<span class="constraint">${esc(c)}</span>`).join("")}</div></div>`
-      : "";
-    return `<div class="subagent">${head}${findings}${constraints}</div>`;
+    return `<div class="subagent">${head}${findings}</div>`;
   }).join("");
 
-  // consumed context with offending spans highlighted
-  const evByField = {};
-  a.subAgents.forEach(r => r.findings.forEach(f => {
-    const key = fieldForPath(f.sourcePath);
-    (evByField[key] = evByField[key] || []).push(f.evidence);
-  }));
-  const ctx = `
-    <div class="dr-section-title">Raw merchant context the scout ingested</div>
-    <div class="kv">
-      <dt>products.json · name</dt><dd>${esc(seller.productName)}</dd>
-      <dt>offers.price</dt><dd>$${Number(seller.price).toFixed(2)} <span style="color:var(--txt-faint)">(market ~$${Number(seller.marketReference).toFixed(0)})</span></dd>
-      <dt>provider.url</dt><dd>${esc(seller.providerUrl)} · domain age ${seller.domainAgeDays}d</dd>
-      <dt>payment.handler</dt><dd>${highlight(JSON.stringify(seller.paymentHandler), evByField.paymentHandler)}</dd>
-      <dt>identity.support</dt><dd>${seller.supportChannel ? esc(seller.supportChannel) : '<span style="color:var(--red)">(none)</span>'}</dd>
-    </div>
-    <div class="dr-section-title">products.json · description</div>
-    <div class="context-block">${highlight(seller.description, evByField.description)}</div>
-    <div class="dr-section-title">ucp.json · return policy</div>
-    <div class="context-block">${highlight(seller.returnPolicy, evByField.returnPolicy)}</div>`;
+  // gather every evidence string so we can highlight the matching review text
+  const allEvidence = [];
+  a.subAgents.forEach(r => r.findings.forEach(f => allEvidence.push(f.evidence)));
 
-  // fit breakdown
+  // consumed context = the reviews this isolated scout actually ingested
+  const reviewsHtml = seller.reviews.map(rv => `
+    <div class="review-row ${rv.isFake ? "review-fake" : ""}">
+      <div class="review-meta">
+        <span class="rv-stars">${"★".repeat(Math.round(rv.rating))}${"☆".repeat(5 - Math.round(rv.rating))}</span>
+        <span class="rv-author">${esc(rv.author)}</span>
+        <span class="rv-flag ${rv.verified ? "rv-verified" : "rv-unverified"}">${rv.verified ? "verified" : "unverified"}</span>
+        ${rv.isFake ? '<span class="rv-flag rv-planted">planted fake</span>' : ""}
+      </div>
+      <div class="review-text">${highlight(rv.text, allEvidence)}</div>
+    </div>`).join("");
+
+  const ctx = `
+    <div class="dr-section-title">Seller metadata the scout ingested</div>
+    <div class="kv">
+      <dt>store</dt><dd>${esc(seller.name)} · ${esc(seller.sellerId)}</dd>
+      <dt>category</dt><dd>${esc(seller.category)}</dd>
+      <dt>asin</dt><dd>${esc(seller.asin)}</dd>
+      <dt>price</dt><dd>$${Number(seller.price).toFixed(2)}</dd>
+      <dt>reviews</dt><dd>${seller.reviewsTotal} total · ${seller.reviewsVerified} verified</dd>
+    </div>
+    <div class="dr-section-title">Reviews ingested (isolated context · planted fakes highlighted)</div>
+    <div class="reviews-block">${reviewsHtml}</div>`;
+
+  // product fit
   const fit = a.fit;
   const fitHtml = `
     <div class="dr-section-title">Product fit vs personal context</div>
     <div class="kv">
+      <dt>product score</dt><dd>${Number(fit.productScore).toFixed(0)}/100 <span style="color:var(--txt-faint)">(verified reviews only)</span></dd>
       <dt>within budget</dt><dd>${fit.withinBudget ? '<span class="tag-match">✓ yes</span>' : '<span class="tag-miss">✗ over budget</span>'}</dd>
-      <dt>priorities met</dt><dd class="tag-match">${(fit.prioritiesMet || []).map(esc).join(", ") || "—"}</dd>
-      <dt>priorities missed</dt><dd class="tag-miss">${(fit.prioritiesMissed || []).map(esc).join(", ") || "—"}</dd>
-      <dt>must-haves missed</dt><dd class="tag-miss">${(fit.mustHavesMissed || []).map(esc).join(", ") || "—"}</dd>
     </div>`;
 
   $("drawerPanel").innerHTML = `
@@ -333,9 +330,9 @@ function openDrawer(seller) {
         <div class="dr-title">${esc(seller.name)} <span class="decision ${decClass}">${a.overallDecision.replace(/_/g, " ")}</span></div>
       </div>
     </div>
-    <div class="dr-sub">${esc(seller.productName)} · ${esc(seller.domain)} · trust ${a.trustScore}/100 · fit ${a.fitScore}/100</div>
-    <div class="dr-summary ${a.overallDecision === "allow" ? "verdict ok" : "verdict bad"}">${esc(a.summary)}</div>
-    <div class="dr-section-title">Scouting agent · 4 security sub-agents</div>
+    <div class="dr-sub">${esc(seller.category)} · ${esc(seller.sellerId)} · trust ${a.trustScore}/100 · product ${a.productScore}/100 · ${a.recommendation}</div>
+    <div class="dr-summary ${a.recommendation === "safe" ? "verdict ok" : "verdict bad"}">${esc(a.summary)}</div>
+    <div class="dr-section-title">Scouting agent · 4 security sub-agents (run in isolation)</div>
     ${subHtml}
     ${fitHtml}
     ${ctx}
@@ -349,7 +346,8 @@ function closeDrawer() { $("drawer").classList.add("hidden"); }
 
 // ---------- wire-up ----------
 $("rerunBtn").addEventListener("click", () => loadTrace({ fresh: true, spin: true }));
-$("storesSel").addEventListener("change", () => loadTrace({ fresh: false }));
+$("levelSel").addEventListener("change", () => loadTrace({ fresh: false }));
+$("categorySel").addEventListener("change", () => loadTrace({ fresh: false }));
 $("drawerBackdrop").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(drawEdges, 120); });

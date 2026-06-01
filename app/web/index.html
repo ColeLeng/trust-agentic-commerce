@@ -16,14 +16,21 @@
       </div>
     </div>
     <div class="controls">
-      <label class="stores-ctrl">stores
-        <select id="storesSel">
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6">6</option>
-          <option value="7" selected>7</option>
-          <option value="8">8</option>
-          <option value="10">10</option>
+      <label class="stores-ctrl">shopping for
+        <select id="categorySel">
+          <option value="Beauty" selected>Skincare moisturizer (Beauty)</option>
+          <option value="Electronics">Portable charger (Electronics)</option>
+          <option value="Sports &amp; Outdoors">Water bottle (Sports)</option>
+          <option value="Health &amp; Household">Supplement (Health)</option>
+          <option value="All">All — full marketplace</option>
+        </select>
+      </label>
+      <label class="stores-ctrl">contamination
+        <select id="levelSel">
+          <option value="0">0% · clean baseline</option>
+          <option value="0.2">20% · light fake flood</option>
+          <option value="0.4" selected>40% · flood + injection</option>
+          <option value="0.6">60% · heavy attack</option>
         </select>
       </label>
       <button id="rerunBtn" class="btn">↻ Re-run audit</button>
@@ -41,11 +48,11 @@
       <div class="flow-head">
         <span class="flow-step">1 · Buyer question</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-step">2 · Planner dispatches</span>
+        <span class="flow-step">2 · Concierge dispatches isolated scouts</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-step">3 · Per-seller scout runs 4 sub-agents</span>
+        <span class="flow-step">3 · Each scout runs 4 security sub-agents</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-step">4 · Concierge picks safe + compatible</span>
+        <span class="flow-step">4 · Concierge adjudicates (trust-gated)</span>
       </div>
       <div id="plannerNode" class="planner-node"></div>
       <svg id="edges" class="edges"></svg>

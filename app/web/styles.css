@@ -237,6 +237,20 @@ body {
 .constraints { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
 .constraint { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(106,168,255,.1); border: 1px solid #2c3f5c; color: #9cc1f5; }
 
+/* ---------- ingested reviews (consumed context) ---------- */
+.reviews-block { display: flex; flex-direction: column; gap: 8px; }
+.review-row { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--bg-2); }
+.review-row.review-fake { border-color: rgba(239,68,68,.45); background: rgba(239,68,68,.06); }
+.review-meta { display: flex; align-items: center; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
+.rv-stars { color: var(--amber); font-size: 12px; letter-spacing: 1px; }
+.rv-author { font-family: var(--mono); font-size: 11px; color: var(--txt-dim); }
+.rv-flag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 2px 7px; border-radius: 5px; }
+.rv-verified { background: rgba(52,211,153,.14); color: var(--green); }
+.rv-unverified { background: rgba(147,160,180,.14); color: var(--txt-faint); }
+.rv-planted { background: rgba(239,68,68,.18); color: var(--crit); }
+.review-text { font-size: 12px; line-height: 1.5; color: var(--txt); word-break: break-word; }
+.review-text mark { background: rgba(248,113,113,.28); color: #ffd9d9; padding: 0 2px; border-radius: 3px; }
+
 /* ---------- loading ---------- */
 .loading { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8,10,14,.55); z-index: 80; gap: 12px; grid-auto-flow: column; color: var(--txt-dim); }
 .spinner { width: 26px; height: 26px; border: 3px solid var(--line-2); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
