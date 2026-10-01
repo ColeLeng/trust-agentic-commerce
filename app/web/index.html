@@ -3,21 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Trust Agentic Commerce — Buyer Journey</title>
+  <title>Trust Agentic Commerce — Flow Console</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">◈</span>
-      <div>
-        <div class="brand-title">Trust Agentic Commerce</div>
-        <div class="brand-sub">Buyer journey · context-isolated security scouts</div>
-      </div>
+      <span class="logo" aria-hidden="true"></span>
+      <span class="brand-title">Trust Agentic Commerce</span>
+      <span class="brand-sep">/</span>
+      <span class="brand-sub">Buyer ↔ seller information flow</span>
     </div>
     <div class="controls">
-      <label class="stores-ctrl">stores
-        <select id="storesSel">
+      <div class="seg" role="group" aria-label="Playback">
+        <button id="playBtn" class="btn icon" title="Pause / play">❚❚</button>
+        <button id="replayBtn" class="btn" title="Replay from start">↺ Replay</button>
+        <select id="speedSel" class="btn" title="Playback speed">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+      </div>
+      <label class="ctrl">Sellers
+        <select id="storesSel" class="btn">
           <option value="4">4</option>
           <option value="5">5</option>
           <option value="6">6</option>
@@ -26,44 +35,59 @@
           <option value="10">10</option>
         </select>
       </label>
-      <button id="rerunBtn" class="btn">↻ Re-run audit</button>
+      <label class="toggle"><input type="checkbox" id="truthToggle" /> Hidden labels</label>
       <span id="modeBadge" class="badge">…</span>
-      <a id="weaveBadge" class="badge weave hidden" target="_blank" rel="noopener">◢ Weave</a>
+      <a id="weaveBadge" class="badge weave hidden" target="_blank" rel="noopener">Weave ↗</a>
     </div>
   </header>
 
-  <main class="layout">
-    <!-- LEFT: buyer + personal context -->
-    <aside class="rail left" id="buyerPanel"></aside>
+  <section class="kpis" id="kpis"></section>
 
-    <!-- CENTER: the journey flow -->
-    <section class="flow" id="flow">
-      <div class="flow-head">
-        <span class="flow-step">1 · Buyer question</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-step">2 · Planner dispatches</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-step">3 · Per-seller scout runs 4 sub-agents</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-step">4 · Concierge picks safe + compatible</span>
+  <main class="console">
+    <section class="panel flow-panel">
+      <div class="panel-head">
+        <span class="panel-title">Message flow</span>
+        <span class="phase" id="phaseLabel">idle</span>
+        <div class="legend">
+          <span><i class="lg req"></i>request / decision</span>
+          <span><i class="lg raw"></i>raw seller content</span>
+          <span><i class="lg bad"></i>poisoned content</span>
+          <span><i class="lg json"></i>structured report</span>
+          <span><i class="lg buy"></i>checkout</span>
+        </div>
       </div>
-      <div id="plannerNode" class="planner-node"></div>
-      <svg id="edges" class="edges"></svg>
-      <div id="sellerGrid" class="seller-grid"></div>
-      <div id="conciergeNode" class="planner-node concierge"></div>
+      <div class="canvas-wrap">
+        <div class="canvas" id="canvas">
+          <div class="col-label c1">Buyer</div>
+          <div class="col-label c2">Concierge <small>master agent</small></div>
+          <div class="col-label c3">Isolated contexts <small>one scout + one seller each</small></div>
+          <div class="node buyer" id="buyerNode"></div>
+          <div class="node concierge" id="conciergeNode"></div>
+          <div class="lanes" id="lanes"></div>
+          <svg class="edges" id="edges"></svg>
+        </div>
+      </div>
     </section>
 
-    <!-- RIGHT: ground truth + scoreboard -->
-    <aside class="rail right" id="truthPanel"></aside>
+    <aside class="side">
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <span class="panel-title">Event log</span>
+          <span class="muted" id="logCount">0 messages</span>
+        </div>
+        <ol class="log" id="log"></ol>
+      </section>
+      <section class="panel inspect-panel">
+        <div class="panel-head">
+          <span class="panel-title">Message inspector</span>
+          <span class="muted">click any log line or node</span>
+        </div>
+        <div class="inspector" id="inspector"></div>
+      </section>
+    </aside>
   </main>
 
-  <!-- seller detail drawer -->
-  <div id="drawer" class="drawer hidden">
-    <div class="drawer-backdrop" id="drawerBackdrop"></div>
-    <div class="drawer-panel" id="drawerPanel"></div>
-  </div>
-
-  <div id="loading" class="loading hidden"><div class="spinner"></div><span>running agents…</span></div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div><span>Running agents…</span></div>
 
   <script src="app.js"></script>
 </body>
