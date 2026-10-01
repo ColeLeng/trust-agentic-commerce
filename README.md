@@ -66,6 +66,9 @@ python eval/run_eval.py                      # precision/recall on the Salminen 
 > python experiments/contamination_sweep.py \
 >     --baseline-models claude-haiku-4-5,claude-sonnet-5-5,claude-opus-4-8 --trials 3
 > python -m unittest discover tests   # live-safety tests (fake client, no spend)
+> # your own agent: a function (stores, question) -> seller_id
+> python experiments/contamination_sweep.py --skip-isolated --attack evasion \
+>     --agent examples.cheapest_agent:choose
 > ```
 
 ## Ownership map — work in parallel without collisions
