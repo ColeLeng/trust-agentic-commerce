@@ -22,6 +22,7 @@ Live options (cost is printed up front and capped by --max-cost):
     --trials 3            # repeat each baseline pick (models are not deterministic)
     --skip-isolated       # baseline only: a few cents
     --max-cost 15         # hard stop, USD
+    --attack evasion      # believable verified fakes + a smear of the honest sellers
 
 Writes defense_results.json.
 
@@ -68,7 +69,7 @@ def estimate_max_usd(models, trials, levels, skip_isolated) -> float:
 
 
 def run_sweep(levels=None, baseline_models=None, trials: int = 1,
-              skip_isolated: bool = False) -> dict:
+              skip_isolated: bool = False, attack: str = "crude") -> dict:
     init_tracing()
 
     levels = levels or LEVELS
@@ -80,7 +81,7 @@ def run_sweep(levels=None, baseline_models=None, trials: int = 1,
     experiments = []
 
     for level in levels:
-        stores = contaminated_stores(level)
+        stores = contaminated_stores(level, attack=attack)
         honest = honest_store_ids(stores)
 
         baseline_runs = []
@@ -130,6 +131,7 @@ def run_sweep(levels=None, baseline_models=None, trials: int = 1,
 
     return {
         "mode": "live" if live else "mock",
+        "attack": attack,
         "baseline_models": baseline_models,
         "trials": trials,
         "honest_store_ids": honest_store_ids(contaminated_stores(0.0)),
@@ -145,7 +147,8 @@ def run_sweep(levels=None, baseline_models=None, trials: int = 1,
 
 def _print_table(result: dict) -> None:
     live = result["mode"] == "live"
-    print(f"=== Context-isolation defense: contamination sweep [{result['mode'].upper()}] ===")
+    print(f"=== Context-isolation defense: contamination sweep "
+          f"[{result['mode'].upper()}, attack={result['attack']}] ===")
     if not live:
         print("    baseline = hand-written naive scorer (simulation, no model).")
     print()
@@ -175,17 +178,22 @@ def main() -> None:
     ap.add_argument("--trials", type=int, default=1, help="baseline picks per model per level (live only)")
     ap.add_argument("--skip-isolated", action="store_true", help="run only the (cheap) baseline")
     ap.add_argument("--max-cost", type=float, default=None, help="hard USD cap (default $10 or MAX_COST_USD)")
+    ap.add_argument("--attack", choices=["crude", "evasion"], default="crude",
+                    help="crude: hype fakes + literal injection; evasion: believable fakes + cross-seller smear")
+    ap.add_argument("--levels", default="",
+                    help="comma-separated contamination levels, e.g. 0.4,0.6 (default 0,0.2,0.4,0.6)")
     ap.add_argument("--yes", action="store_true", help="skip the cost confirmation prompt")
     args = ap.parse_args()
 
     models = [m.strip() for m in args.baseline_models.split(",") if m.strip()] or None
+    levels = [float(x) for x in args.levels.split(",") if x.strip()] or LEVELS
     if args.max_cost is not None:
         os.environ["MAX_COST_USD"] = str(args.max_cost)
 
     if is_live():
         os.environ["LIVE_STRICT"] = "1"  # a failed live call aborts instead of falling back
         m = models or [os.getenv("BASELINE_MODEL", DEFAULT_BASELINE_MODEL)]
-        est = estimate_max_usd(m, args.trials, LEVELS, args.skip_isolated)
+        est = estimate_max_usd(m, args.trials, levels, args.skip_isolated)
         print(f"LIVE run: baseline {m} x {args.trials} trial(s); "
               f"isolated {'skipped' if args.skip_isolated else SCOUT_MODEL}.")
         print(f"Worst-case estimate ${est:.2f}; hard cap ${cost_meter.max_cost_usd():.2f}.")
@@ -194,7 +202,8 @@ def main() -> None:
             return
 
     try:
-        result = run_sweep(baseline_models=models, trials=args.trials, skip_isolated=args.skip_isolated)
+        result = run_sweep(levels=levels, baseline_models=models, trials=args.trials,
+                           skip_isolated=args.skip_isolated, attack=args.attack)
     finally:
         if is_live():
             print("\n" + cost_meter.summary())
