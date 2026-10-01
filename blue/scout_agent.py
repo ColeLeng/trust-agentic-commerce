@@ -21,6 +21,8 @@ Aggregation rules:
   - All allow                   → allow → "safe"
 
 MOCK-FIRST: no ANTHROPIC_API_KEY → heuristic checks per sub-agent, deterministic.
+LIVE: a failed live call raises under LIVE_STRICT=1; otherwise that check falls
+back to its heuristic (counted in cost_meter.fallbacks) -- never to a silent "allow".
 """
 
 from __future__ import annotations
@@ -36,8 +38,11 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+import cost_meter
 from schema import Evidence, Store
 from tracing import traced
+
+SCOUT_MODEL = os.getenv("SCOUT_MODEL", "claude-opus-4-8")
 
 # ---------------------------------------------------------------------------
 # Spec files (loaded once at import time)
@@ -154,7 +159,8 @@ def _live_call(
     agent_name: str,
     spec_text: str,
     store: Store,
-) -> SubAgentFinding:
+) -> Optional[SubAgentFinding]:
+    """One live sub-agent call. Returns None on failure so the caller uses its heuristic."""
     system_prompt = (
         f"{spec_text}\n\n"
         "You are performing the security check described above on ONE seller.\n"
@@ -164,8 +170,9 @@ def _live_call(
         "Set agent to the check name. Set risk_level and decision per Output Expectations."
     )
     try:
+        cost_meter.check_budget()
         msg = client.messages.create(
-            model="claude-opus-4-8",
+            model=SCOUT_MODEL,
             max_tokens=2048,
             thinking={"type": "adaptive"},
             output_config={
@@ -179,6 +186,7 @@ def _live_call(
             }],
             messages=[{"role": "user", "content": _build_prompt(store)}],
         )
+        cost_meter.record(SCOUT_MODEL, msg.usage)
         raw = next(
             (b.text for b in msg.content if b.type == "text"), "{}"
         )
@@ -202,10 +210,10 @@ def _live_call(
             decision=data["decision"],
             findings=findings,
         )
-    except Exception:
-        return SubAgentFinding(
-            agent=agent_name, risk_level="low", decision="allow", findings=[]
-        )
+    except Exception as err:
+        # Never report a failed check as "allow": that would mark the seller safe.
+        cost_meter.live_failed(f"scout {agent_name} on {store.store_id}", err)
+        return None
 
 # ---------------------------------------------------------------------------
 # Sub-agent 1 — Indirect Prompt Injection
@@ -282,10 +290,12 @@ def _mock_ipi(store: Store) -> SubAgentFinding:
 
 def run_injection_check(store: Store, client=None) -> SubAgentFinding:
     if client:
-        return _live_call(
+        finding = _live_call(
             client, "indirect_prompt_injection",
             _SPECS["indirect_prompt_injection"], store,
         )
+        if finding is not None:
+            return finding
     return _mock_ipi(store)
 
 # ---------------------------------------------------------------------------
@@ -372,10 +382,12 @@ def _mock_fraud_bto(store: Store) -> SubAgentFinding:
 
 def run_fraud_bto_check(store: Store, client=None) -> SubAgentFinding:
     if client:
-        return _live_call(
+        finding = _live_call(
             client, "commerce_fraud_bto",
             _SPECS["commerce_fraud_bto"], store,
         )
+        if finding is not None:
+            return finding
     return _mock_fraud_bto(store)
 
 # ---------------------------------------------------------------------------
@@ -466,10 +478,12 @@ def _mock_storefront(store: Store) -> SubAgentFinding:
 
 def run_storefront_check(store: Store, client=None) -> SubAgentFinding:
     if client:
-        return _live_call(
+        finding = _live_call(
             client, "fraudulent_storefront_lure",
             _SPECS["fraudulent_storefront_lure"], store,
         )
+        if finding is not None:
+            return finding
     return _mock_storefront(store)
 
 # ---------------------------------------------------------------------------
@@ -554,10 +568,12 @@ def _mock_returns(store: Store) -> SubAgentFinding:
 
 def run_returns_check(store: Store, client=None) -> SubAgentFinding:
     if client:
-        return _live_call(
+        finding = _live_call(
             client, "logic_hijacking_returns",
             _SPECS["logic_hijacking_returns"], store,
         )
+        if finding is not None:
+            return finding
     return _mock_returns(store)
 
 # ---------------------------------------------------------------------------

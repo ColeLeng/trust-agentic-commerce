@@ -52,6 +52,22 @@ python experiments/contamination_sweep.py   # baseline vs. isolated across 0->60
 python eval/run_eval.py                      # precision/recall on the Salminen holdout
 ```
 
+> **Mock vs. live sweep.** Without `ANTHROPIC_API_KEY`, the sweep's baseline is a
+> hand-written naive scorer (rating × volume, plus a bonus for injected text) — a
+> simulation, not a model. With a key set, both sides call real models, every row
+> is labelled with what actually ran, and a failed live call aborts the run instead
+> of silently falling back. Cost is estimated up front and hard-capped:
+>
+> ```bash
+> # baseline only, three models, three trials each  (worst case ~$2.21)
+> python experiments/contamination_sweep.py --skip-isolated \
+>     --baseline-models claude-haiku-4-5,claude-sonnet-5-5,claude-opus-4-8 --trials 3
+> # full run incl. isolated scouts on claude-opus-4-8  (worst case ~$7.84, cap $10)
+> python experiments/contamination_sweep.py \
+>     --baseline-models claude-haiku-4-5,claude-sonnet-5-5,claude-opus-4-8 --trials 3
+> python -m unittest discover tests   # live-safety tests (fake client, no spend)
+> ```
+
 ## Ownership map — work in parallel without collisions
 
 | Path | Owner | What it does |
