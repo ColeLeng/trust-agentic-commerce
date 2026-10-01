@@ -79,7 +79,7 @@ def _live_choose(stores: List[Store], question: str, model: str) -> BaselineDeci
 
     cost_meter.check_budget()
     blob = "\n\n".join(_store_blob(s) for s in stores)
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(**cost_meter.client_kwargs())
     # max_tokens leaves room for models that think by default (e.g. Sonnet 5.5).
     msg = client.messages.create(
         model=model, max_tokens=4096,

@@ -37,6 +37,13 @@ fallbacks = 0
 _by_model: Dict[str, Dict[str, float]] = {}
 
 
+def client_kwargs() -> dict:
+    """Extra anthropic.Anthropic() kwargs. Keys not scoped to a workspace need
+    the anthropic-workspace-id header; set ANTHROPIC_WORKSPACE_ID for those."""
+    ws = os.getenv("ANTHROPIC_WORKSPACE_ID")
+    return {"default_headers": {"anthropic-workspace-id": ws}} if ws else {}
+
+
 def max_cost_usd() -> float:
     return float(os.getenv("MAX_COST_USD", "10"))
 

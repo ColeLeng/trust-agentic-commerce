@@ -670,7 +670,7 @@ def scout_one(store: Store) -> ScoutReport:
     if live:
         try:
             import anthropic  # type: ignore
-            client = anthropic.Anthropic()
+            client = anthropic.Anthropic(**cost_meter.client_kwargs())
         except ImportError:
             live = False
 
