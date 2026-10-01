@@ -11,6 +11,8 @@ A multi-agent **trust audit** system for online stores, built for a 5-hour hacka
   framework) that animates the buyer journey: planner fan-out → isolated scouts →
   concierge decision, with a precision/recall scoreboard.
 
+> **[Attack leaderboard](LEADERBOARD.md):** which seller-side attacks fool real shopping agents. Beat it by opening an issue.
+
 ## ⭐ The one hard rule: MOCK-FIRST
 
 On a **fresh clone with no LLM backend**, both of these succeed:
